@@ -554,7 +554,7 @@ void calculate(uint64_t iUsec, uint64_t curTime, uint64_t lastTime) {
   printf("%02d:%02d:%02d  %-28s% 10.2f% 11.3fms% 11.3fms %7lu %7lu %7lu %7lu\n", p_tm_time->tm_hour,
          p_tm_time->tm_min, p_tm_time->tm_sec, percentStr,
          m_ResultTmp.iOkResponseNum / (lastTime / 1000000.0),
-         m_ResultTmp.dSumRspTimeUs > 0
+         m_ResultTmp.iOkResponseNum > 0
              ? m_ResultTmp.dSumRspTimeUs / 1000.0 / m_ResultTmp.iOkResponseNum
              : 0,
          m_ResultTmp.llMaxRspTimeUs / 1000.0, m_ResultTmp.m_iTimeL1Num, m_ResultTmp.m_iTimeL2Num,
@@ -650,10 +650,13 @@ void printSummary() {
   }
   printf("Success percent: %.2f%%\n", percent * 100);
 
-  double averageResponseTime =
-      m_AllResultHistory.dSumRspTimeUs / 1000.0 / m_AllResultHistory.iOkResponseNum;
+  double averageResponseTime = 0;
+  if (m_AllResultHistory.iOkResponseNum > 0) {
+    averageResponseTime =
+        m_AllResultHistory.dSumRspTimeUs / 1000.0 / m_AllResultHistory.iOkResponseNum;
+  }
   printf("Max response time: %.3fms\n", m_AllResultHistory.llMaxRspTimeUs / 1000.0);
-  printf("Average response time: %.3fms\n", averageResponseTime > 0 ? averageResponseTime : 0);
+  printf("Average response time: %.3fms\n", averageResponseTime);
 
   printf("Running time(hour:min:sec): %" PRIu64 ":%02" PRIu64 ":%06.3f\n", iUsecRuned / 3600000000,
          (iUsecRuned / 60000000) % 60, (iUsecRuned % 60000000) / 1000000.0);
