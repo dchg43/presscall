@@ -40,7 +40,7 @@ void destroyEnd(TConfig* g_Config) {
 CUserFunc::CUserFunc(int iMyID, TConfig* g_Config) {
   m_iMyID = iMyID;
   m_Config = g_Config;
-  m_pszRecvBuff = new char[m_Config->m_iRecvLen + 1];
+  m_pszRecvBuff = new char[m_Config->m_iRecvLen + 2];
   m_pszRecvBuff[m_Config->m_iRecvLen] = '\0';
 
   if (m_Config->m_test_mode == EN_CS) {
@@ -123,7 +123,6 @@ int64_t CUserFunc::DoOnce(void) {
   }
 
   int result = m_TcpCltSocket->tcpRead(m_pszRecvBuff, m_Config->m_iRecvLen);
-  int readlen = strlen(m_pszRecvBuff);
 
   int64_t llRspTimeUs = getCurrentTimeUs() - tBegin;
 
@@ -134,15 +133,16 @@ int64_t CUserFunc::DoOnce(void) {
   if (result > 0) {
     if (result == 2) {
       if (m_Config->m_iPrintError) {
-        snprintf(m_pszRecvBuff, m_Config->m_iRecvLen, "Cookie changed, new cookie: %s.\n",
+        snprintf(m_pszRecvBuff, m_Config->m_iRecvLen, "Cookie changed, new cookie: %s\n",
                  m_TcpCltSocket->getCookie());
-        fwrite(m_pszRecvBuff, readlen, 1, m_Config->errLogOut);
+        fwrite(m_pszRecvBuff, strlen(m_pszRecvBuff), 1, m_Config->errLogOut);
       }
       m_lenSendBuff = m_TcpCltSocket->build_buffer(m_pszSendBuff, m_Config);
     }
     return llRspTimeUs;
   } else if (result == -1 && m_Config->m_iPrintError) {
     //    && !(*m_TcpCltSocket->hasTimeEnd()) {
+    int readlen = strlen(m_pszRecvBuff);
     if (readlen > 0) {
       int errlen = strlen(m_TcpCltSocket->getErrMsg());
       if (readlen + errlen + 2 > m_Config->m_iRecvLen) {
@@ -152,11 +152,11 @@ int64_t CUserFunc::DoOnce(void) {
         snprintf(m_pszRecvBuff + readlen, m_Config->m_iRecvLen - readlen, "\n%s\n",
                  m_TcpCltSocket->getErrMsg());
       }
-      fwrite(m_pszRecvBuff, readlen, 1, m_Config->errLogOut);
+      fwrite(m_pszRecvBuff, strlen(m_pszRecvBuff), 1, m_Config->errLogOut);
     } else {
       snprintf(m_pszRecvBuff, m_Config->m_iRecvLen, "read error: %s.\n",
                m_TcpCltSocket->getErrMsg());
-      fwrite(m_pszRecvBuff, readlen, 1, m_Config->errLogOut);
+      fwrite(m_pszRecvBuff, strlen(m_pszRecvBuff), 1, m_Config->errLogOut);
     }
   }
   return result;

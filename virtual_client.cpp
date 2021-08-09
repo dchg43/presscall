@@ -157,13 +157,15 @@ int VirtualClient::checkHttpResponse(const char* m_pszRecvBuff, int64_t unDataLe
     if (pCookie) {
       pCookie = pCookie + strlen("Set-Cookie: ");
       const char* pCookieEnd = strchr(pCookie, ';');
-      char* localcookies = getCookie();
-      if (localcookies == NULL)
-        localcookies = new char[pCookieEnd - pCookie + 1];
-      memcpy(localcookies, pCookie, pCookieEnd - pCookie);
-      localcookies[pCookieEnd - pCookie] = '\0';
-      setCookie(localcookies);
-      return 2;
+      if (pCookieEnd) {
+        char* localcookies = getCookie();
+        if (localcookies == NULL)
+          localcookies = new char[pCookieEnd - pCookie + 1];
+        memcpy(localcookies, pCookie, pCookieEnd - pCookie);
+        localcookies[pCookieEnd - pCookie] = '\0';
+        setCookie(localcookies);
+        return 2;
+      }
     }
     return 1;
   } else {
@@ -354,7 +356,7 @@ int VirtualClient::tcpRead(char* pBuff, int64_t iBufLen) {
       iOneReadLen = readonce(pBuff + MAX_HEADER_LEN,
                              tmin(iBufLen - MAX_HEADER_LEN, iResponseLen - iReceivLen));
     } else {
-      iOneReadLen = readonce(pBuff + iReceivLen, iBufLen - iReceivLen - 1);
+      iOneReadLen = readonce(pBuff + iReceivLen, iBufLen - iReceivLen);
     }
 
     if (iOneReadLen <= 0) {
