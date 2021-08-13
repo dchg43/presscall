@@ -196,7 +196,7 @@ void initConfig(int argc, char** argv) {
       "Host", CFG_STRING, g_Config.m_szDestIp, "127.0.0.1", sizeof(g_Config.m_szDestIp),  // Host
       "HttpMethod", CFG_STRING, g_Config.m_szMethod, "GET", sizeof(g_Config.m_szMethod),  // Method
       "Port", CFG_INT, &(g_Config.m_iDestPort), 80,                                       // Port
-      "ThreadNum", CFG_INT, &(g_Config.m_iThreadNum), 30,            // Thread number
+      "ThreadNum", CFG_INT, &(g_Config.m_iThreadNum), 1,             // Thread number
       "ThreadSleepMs", CFG_INT, &(g_Config.m_iThreadSleepUs), 0,     // sleep time
       "RunDuration", CFG_INT, &(g_Config.m_iRunDuration), 5,         // run time
       "SampleSecs", CFG_INT, &(g_Config.m_iSampleUs), 5,             //
@@ -334,6 +334,12 @@ void normally_config() {
     g_Config.m_iRecvLen = RECV_MAX_LEN;
   } else {
     g_Config.m_iRecvLen = g_Config.m_iRecvLen + MAX_HEADER_LEN;
+  }
+  if(g_Config.m_iThreadNum <= 0) {
+    g_Config.m_iThreadNum = 1;
+  }
+  if(g_Config.m_iLen < 0) {
+    g_Config.m_iLen = 0;
   }
 }
 

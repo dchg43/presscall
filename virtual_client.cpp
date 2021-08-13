@@ -90,10 +90,10 @@ int64_t VirtualClient::httpReadComplete(const char* pData, int64_t unDataLen,
     pHeadEnd += 4;  // +len("\r\n\r\n")
     int64_t iHeadLen = pHeadEnd - pData;
 
-    // no body, return head
     const char* pContentLength = strstr(pData, "Content-Length:");
     if ((pContentLength == NULL) || (pContentLength > pHeadEnd)) {
       const char* pTransfer = strstr(pData, "Transfer-Encoding:");
+      // no body, return head
       if ((pTransfer == NULL) || (pTransfer > pHeadEnd)) {
         iPkgTheoryLen = iHeadLen;
         return iHeadLen;
@@ -101,7 +101,7 @@ int64_t VirtualClient::httpReadComplete(const char* pData, int64_t unDataLen,
 
       // chunked model
       const char* pchunkEnd = strstr(pHeadEnd, "\r\n0\r\n\r\n");
-      if ((pchunkEnd == NULL)) {
+      if (pchunkEnd == NULL || pchunkEnd + 7 - pData > unDataLen) {
         return 0;
       }
       return unDataLen;
