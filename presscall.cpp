@@ -171,6 +171,11 @@ void* child_func(void* arg) {
 
   printf("Start finished, %d threads running, will %sprint error message ...\n", realThreadNum,
          g_Config.m_iPrintError ? "" : "not ");
+  printf(
+      "\nTIME      OK/NO/BAD/ALL=PERCENT           TPS     AvgTime(ms)  MaxTime(ms) "
+      " <%3dms  <%3dms  <%3dms  >%3dms\n",
+      g_Config.m_iTimeLevel1 / 1000, g_Config.m_iTimeLevel2 / 1000, g_Config.m_iTimeLevel3 / 1000,
+      g_Config.m_iTimeLevel3 / 1000);
   fflush(stdout);
 
   return NULL;
@@ -316,18 +321,20 @@ void normally_config() {
            g_Config.m_test_mode == 1 ? "http" : (g_Config.m_test_mode == 2 ? "https" : "tcp"),
            g_Config.m_szDestIp, g_Config.m_iDestPort, g_Config.m_pszGetFile, g_Config.m_pszHost);
   }
-  printf(
-      "LongConnection %d  MsgLen %d  every %dms  duration %lus "
-      "level(ms):%d,%d,%d\n",
-      g_Config.m_iLongConn, g_Config.m_iLen, g_Config.m_iThreadSleepUs, g_Config.m_iRunDuration,
-      g_Config.m_iTimeLevel1, g_Config.m_iTimeLevel2, g_Config.m_iTimeLevel3);
+  printf("LongConnection %d  MsgLen %d  every %dms  duration %lus level(ms):%d,%d,%d\n",
+         g_Config.m_iLongConn, g_Config.m_iLen, g_Config.m_iThreadSleepUs, g_Config.m_iRunDuration,
+         g_Config.m_iTimeLevel1, g_Config.m_iTimeLevel2, g_Config.m_iTimeLevel3);
 
   g_Config.m_iSampleUs = g_Config.m_iSampleUs * 1000000;
   g_Config.m_iThreadSleepUs = g_Config.m_iThreadSleepUs * 1000;
   g_Config.m_iTimeLevel1 = g_Config.m_iTimeLevel1 * 1000;
   g_Config.m_iTimeLevel2 = g_Config.m_iTimeLevel2 * 1000;
   g_Config.m_iTimeLevel3 = g_Config.m_iTimeLevel3 * 1000;
-  g_Config.m_iRecvLen = g_Config.m_iRecvLen + MAX_HEADER_LEN;
+  if (g_Config.m_iRecvLen <= 0) {
+    g_Config.m_iRecvLen = RECV_MAX_LEN;
+  } else {
+    g_Config.m_iRecvLen = g_Config.m_iRecvLen + MAX_HEADER_LEN;
+  }
 }
 
 void normally_ip() {
@@ -442,35 +449,28 @@ int main(int argc, char** argv) {
     }
   }
 
-  int64_t startTime, curTime, expectTimeUs, endTime;
-  curTime = startTime = expectTimeUs = getCurrentTimeUs();
+  int64_t runStartTime, curTime, sleepEndTimeUs, runEndTime;
+  curTime = runStartTime = sleepEndTimeUs = getCurrentTimeUs();
   if (g_Config.m_iRunDuration == 0) {
-    endTime = LLONG_MAX;
+    runEndTime = LLONG_MAX;
   } else {
-    endTime = expectTimeUs + g_Config.m_iRunDuration * 1000000;
+    runEndTime = curTime + g_Config.m_iRunDuration * 1000000;
   }
-
-  usSleep(g_Config.m_iSampleUs);
-  printf(
-      "\nTIME      OK/NO/BAD/ALL=PERCENT           TPS     AvgTime(ms)  MaxTime(ms) "
-      " <%3dms  <%3dms  <%3dms  >%3dms\n",
-      g_Config.m_iTimeLevel1 / 1000, g_Config.m_iTimeLevel2 / 1000, g_Config.m_iTimeLevel3 / 1000,
-      g_Config.m_iTimeLevel3 / 1000);
 
   // 持续运行
   iUsecRuned = 0;
-  while ((expectTimeUs += g_Config.m_iSampleUs) <= endTime && !isTimeEnd) {
+  while (sleepEndTimeUs < runEndTime && !isTimeEnd) {
+    sleepEndTimeUs += g_Config.m_iSampleUs;
     curTime = getCurrentTimeUs();
-    usSleep(expectTimeUs - curTime);
-    iUsecRuned = expectTimeUs - startTime;
-    calculate(iUsecRuned, curTime, g_Config.m_iSampleUs);
-  }
-  if (!isTimeEnd && g_Config.m_iRunDuration != 0 &&
-      expectTimeUs - g_Config.m_iSampleUs != endTime) {
-    usSleep(endTime - expectTimeUs + g_Config.m_iSampleUs);
-    uint64_t iUsecLast = curTime - startTime;
-    iUsecRuned = g_Config.m_iRunDuration * 1000000;
-    calculate(iUsecRuned, curTime + iUsecRuned, iUsecRuned - iUsecLast);
+    if (sleepEndTimeUs > curTime) {
+      if (usSleep(sleepEndTimeUs - curTime) < 0) {
+        sleepEndTimeUs = getCurrentTimeUs();
+      }
+    } else {
+      sleepEndTimeUs = curTime;
+    }
+    iUsecRuned = sleepEndTimeUs - runStartTime;
+    calculate(iUsecRuned, sleepEndTimeUs, g_Config.m_iSampleUs);
   }
 
   if (!isTimeEnd) {
@@ -500,6 +500,10 @@ int main(int argc, char** argv) {
  功能描述  : 采样函数
 *****************************************************************************/
 void calculate(uint64_t iUsec, uint64_t curTime, uint64_t lastTime) {
+  if (lastTime <= 0) {
+    printf("Run duration time error: %lu\n", lastTime);
+    return;
+  }
   // 备份上次汇总结果并清空
   memcpy(&m_AllResultLast, &m_AllResultHistory, sizeof(TResult));
   memset(&m_AllResultHistory, 0, sizeof(TResult));

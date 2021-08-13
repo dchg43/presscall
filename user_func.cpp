@@ -11,7 +11,7 @@
 #include "https_client.h"
 #include "tcp_client.h"
 
-void usSleep(int uSec) {
+int usSleep(int uSec) {
   // usleep(1000);
   struct timeval timeout;
   timeout.tv_sec = uSec / 1000000;
@@ -22,7 +22,7 @@ void usSleep(int uSec) {
   //    ret = select(0, NULL, NULL, NULL, &timeout);
   // } while(ret<0 && errno==EINTR);
   // select需要响应ctrl+C中断，所以不判断返回值
-  select(0, NULL, NULL, NULL, &timeout);
+  return select(0, NULL, NULL, NULL, &timeout);
 }
 
 void initAhead(TConfig* g_Config) {

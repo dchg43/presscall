@@ -23,7 +23,7 @@ class CUserFunc {
   char* m_pszRecvBuff;
 };
 
-void usSleep(int uSec);
+int usSleep(int uSec);
 void initAhead(TConfig* g_Config);
 void destroyEnd(TConfig* g_Config);
 
