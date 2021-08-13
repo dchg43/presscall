@@ -41,7 +41,7 @@ void _Cfg_TrimStr(char* strInput) {
   }
   *(pe + 1) = '\0';
 
-  // strncpy(strInput, pb, strlen(pb)+1);
+  // strncpy(strInput, pb, strlen(pb) + 1);
   // 改成下边方式，因为strInput, pb指向同一块内存，strcpy会出现覆盖，导致bug
   /*pe = strInput;
   while (*pb != '\0') {
@@ -50,7 +50,7 @@ void _Cfg_TrimStr(char* strInput) {
     pb++;
   }
   *pe = '\0';*/
-  memmove(strInput, pb, strlen(pb)+1);
+  memmove(strInput, pb, strlen(pb) + 1);
 
   return;
 }
@@ -209,7 +209,7 @@ void TLib_Cfg_GetConfig(const char* sConfigFilePath, ...) {
         va_start(ap, sConfigFilePath);
         _Cfg_SetVal(ap, sParam, sVal);
         va_end(ap);
-        //printf("'%s=%s'\n", sParam, sVal);  // 打印从文件中获取的参数
+        // printf("'%s=%s'\n", sParam, sVal);  // 打印从文件中获取的参数
       }
     }
   } while (!feof(pstFile));

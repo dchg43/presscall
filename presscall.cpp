@@ -335,10 +335,10 @@ void normally_config() {
   } else {
     g_Config.m_iRecvLen = g_Config.m_iRecvLen + MAX_HEADER_LEN;
   }
-  if(g_Config.m_iThreadNum <= 0) {
+  if (g_Config.m_iThreadNum <= 0) {
     g_Config.m_iThreadNum = 1;
   }
-  if(g_Config.m_iLen < 0) {
+  if (g_Config.m_iLen < 0) {
     g_Config.m_iLen = 0;
   }
 }

@@ -24,7 +24,8 @@ class HttpClient : public VirtualClient {
   void disconnect();
   bool reconnect();
   bool isConnect();
-  int64_t isReadComplete(const char* pData, int64_t unDataLen, int64_t& iPkgTheoryLen);
+  int64_t isReadComplete(const char* pData, int64_t unDataLen, int64_t iReceivLenInBuff,
+                         int64_t& iPkgTheoryLen);
   int checkResponse(const char* recvData, int64_t unDataLen, int lastRead);
   int readonce(char* pBuff, int64_t iLen);
   int writeonce(char* pBuff, int64_t iLen);

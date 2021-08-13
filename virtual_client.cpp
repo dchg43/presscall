@@ -79,11 +79,12 @@ int VirtualClient::build_tcp_buffer(char* m_pszSendBuff, TConfig* g_Config) {
 
 /** 返回0，没有读完；>0读完 */
 int64_t VirtualClient::httpReadComplete(const char* pData, int64_t unDataLen,
-                                        int64_t& iPkgTheoryLen) {
+                                        int64_t iReceivLenInBuff, int64_t& iPkgTheoryLen) {
   if (iPkgTheoryLen < 0) {
     // no head, or head not enough
     const char* pHeadEnd = strstr(pData, "\r\n\r\n");
-    if ((pHeadEnd == NULL) || (pHeadEnd + 4 - pData > unDataLen)) {
+    // 因为buff没有加\0结束符，查找到的内容有可能超过已读取的长度
+    if ((pHeadEnd == NULL) || (pHeadEnd - pData + 4 > iReceivLenInBuff)) {
       return 0;
     }
 
@@ -101,7 +102,8 @@ int64_t VirtualClient::httpReadComplete(const char* pData, int64_t unDataLen,
 
       // chunked model
       const char* pchunkEnd = strstr(pHeadEnd, "\r\n0\r\n\r\n");
-      if (pchunkEnd == NULL || pchunkEnd + 7 - pData > unDataLen) {
+      // 因为buff没有加\0结束符，查找到的内容有可能超过已读取的长度
+      if (pchunkEnd == NULL || pchunkEnd - pData + 7 > iReceivLenInBuff) {
         return 0;
       }
       return unDataLen;
@@ -127,7 +129,7 @@ int64_t VirtualClient::httpReadComplete(const char* pData, int64_t unDataLen,
 
 /** 返回0，没有读完；>0读完 */
 int64_t VirtualClient::tcpReadComplete(const char* pData, int64_t unDataLen,
-                                       int64_t& iPkgTheoryLen) {
+                                       int64_t iReceivLenInBuff, int64_t& iPkgTheoryLen) {
   if (unDataLen < static_cast<int>(sizeof(int)) * 2)
     return 0;
 
@@ -351,12 +353,16 @@ int VirtualClient::tcpRead(char* pBuff, int64_t iBufLen) {
   int64_t iReceivLen = 0;
   int64_t iResponseLen = -1;
   int iOneReadLen = 0;
+  int64_t iReceivLenInBuff = 0;
   do {
     if (iBufLen <= iReceivLen) {
       iOneReadLen = readonce(pBuff + MAX_HEADER_LEN,
                              tmin(iBufLen - MAX_HEADER_LEN, iResponseLen - iReceivLen));
+      iReceivLenInBuff = MAX_HEADER_LEN + iOneReadLen;
+      iReceivLen += iOneReadLen;
     } else {
       iOneReadLen = readonce(pBuff + iReceivLen, iBufLen - iReceivLen);
+      iReceivLen = iReceivLenInBuff = iReceivLen + iOneReadLen;
     }
 
     if (iOneReadLen <= 0) {
@@ -396,9 +402,7 @@ int VirtualClient::tcpRead(char* pBuff, int64_t iBufLen) {
         return -1;
       }
     }
-
-    iReceivLen += iOneReadLen;
-  } while (isReadComplete(pBuff, iReceivLen, iResponseLen) == 0);
+  } while (isReadComplete(pBuff, iReceivLen, iReceivLenInBuff, iResponseLen) == 0);
   if (iReceivLen < iBufLen) {
     pBuff[iReceivLen] = '\0';
   }
