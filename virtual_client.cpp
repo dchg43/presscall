@@ -101,7 +101,8 @@ int64_t VirtualClient::httpReadComplete(const char* pData, int64_t unDataLen,
       }
 
       // chunked model
-      const char* pchunkEnd = strstr(pHeadEnd, "\r\n0\r\n\r\n");
+      const char* pchunkEnd = pData + iReceivLenInBuff - 10;
+      pchunkEnd = strstr(pchunkEnd, "\r\n0\r\n\r\n");
       // 因为buff没有加\0结束符，查找到的内容有可能超过已读取的长度
       if (pchunkEnd == NULL || pchunkEnd - pData + 7 > iReceivLenInBuff) {
         return 0;

@@ -470,9 +470,11 @@ int main(int argc, char** argv) {
     curTime = getCurrentTimeUs();
     if (sleepEndTimeUs > curTime) {
       if (usSleep(sleepEndTimeUs - curTime) < 0) {
+        // sleep被打断
         sleepEndTimeUs = getCurrentTimeUs();
       }
     } else {
+      // 执行时间超过sleep time
       sleepEndTimeUs = curTime;
     }
     iUsecRuned = sleepEndTimeUs - runStartTime;
