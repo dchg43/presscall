@@ -204,11 +204,11 @@ bool VirtualClient::connectServer(TConfig* g_Config) {
   // l_onoff为0。则马上关闭socket(graceful)，closesocket马上返回。并尽量在后台将内核发送缓冲区的数据发出去。这种情况正常四次挥手，但是会time_wait。
   // l_onoff非0，l_linger为0。closesocket马上返回(abortive)，连接重置，发送RST到对端，并且丢弃内核发送缓冲区中的数据。这种情况非正常四次挥手，不会time_wait。
   // l_onoff非0，l_linger非0。这种情况又分为阻塞和非阻塞。
-  //   对于阻塞socket，则延迟l_linger秒关闭socket，直到发完数据或超时。超时则连接重置，发送RST到对端(abortive)，发完则是正常关闭(graceful)。
+  //   对于阻塞socket，则延迟l_linger秒关闭socket，直到发完数据或超时。超时则连接重置，发送RST到对端(abortive)，发完则是正常关闭(graceful)。会time_wait
   //   对于非阻塞socket，如果closesocket不能立即完成，则马上返回错误WSAEWOULDBLOCK。
   struct linger m_sLinger;
   m_sLinger.l_onoff = 1;
-  m_sLinger.l_linger = 0;
+  m_sLinger.l_linger = 1;
   int res = setsockopt(m_isocket, SOL_SOCKET, SO_LINGER, &m_sLinger, sizeof(linger));
   if (res < 0) {
     snprintf(m_szErrMsg, sizeof(m_szErrMsg), "set SO_LINGER: %s[%d]", strerror(errno), __LINE__);
@@ -328,8 +328,11 @@ void VirtualClient::disconnect() {
   if (m_isocket >= 0) {
     int tmp_isocket = m_isocket;
     m_isocket = -1;
-    shutdown(tmp_isocket, SHUT_RDWR);
-    close(tmp_isocket);
+
+    int result = shutdown(tmp_isocket, SHUT_RDWR);  // shutdown会出现TIME_WAIT
+    if(result != 0) {
+      close(tmp_isocket); // close是否会有TIME_WAIT跟l_linger设置有关。也可以配置net.ipv4.tcp_max_tw_buckets限制TIME_WAIT数量
+    }
   }
 }
 

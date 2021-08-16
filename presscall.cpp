@@ -282,7 +282,7 @@ void initConfig(int argc, char** argv) {
 }
 
 void normally_config() {
-  if (g_Config.m_iLen > SEND_MAX_LEN - MAX_HEADER_LEN) {
+  if (g_Config.m_iLen > SEND_MAX_LEN) {
     printf("WARN: msgLen is too big, please make sure not have 400 or 414 response\n");
     fflush(stdout);
     // exit(2);

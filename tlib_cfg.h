@@ -13,9 +13,9 @@
 #define CFG_INT (int)2
 #define CFG_INT64 (int)3
 #define CFG_DOUBLE (int)4
-#define SEND_MAX_LEN 4000   // large_client_header_buffers默认8K
-#define RECV_MAX_LEN 2012   // MSS + MAX_HEADER_LEN
-#define MAX_HEADER_LEN 512  // client_header_buffer_size默认1024
+#define SEND_MAX_LEN 8181    // large_client_header_buffers默认8K
+#define RECV_MAX_LEN 2524    // MSS + MAX_HEADER_LEN
+#define MAX_HEADER_LEN 1024  // client_header_buffer_size默认1024
 
 // #define countof(x) (sizeof(x) / sizeof(x[0]))
 #define tmin(x, y) ((x) < (y) ? (x) : (y))
