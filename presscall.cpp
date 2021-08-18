@@ -325,7 +325,11 @@ void normally_config() {
          g_Config.m_iLongConn, g_Config.m_iLen, g_Config.m_iThreadSleepUs, g_Config.m_iRunDuration,
          g_Config.m_iTimeLevel1, g_Config.m_iTimeLevel2, g_Config.m_iTimeLevel3);
 
-  g_Config.m_iSampleUs = g_Config.m_iSampleUs * 1000000;
+  if(g_Config.m_iSampleUs > 0) {
+    g_Config.m_iSampleUs = g_Config.m_iSampleUs * 1000000;
+  } else {
+    g_Config.m_iSampleUs = 1000000;
+  }
   g_Config.m_iThreadSleepUs = g_Config.m_iThreadSleepUs * 1000;
   g_Config.m_iTimeLevel1 = g_Config.m_iTimeLevel1 * 1000;
   g_Config.m_iTimeLevel2 = g_Config.m_iTimeLevel2 * 1000;
@@ -508,10 +512,6 @@ int main(int argc, char** argv) {
  功能描述  : 采样函数
 *****************************************************************************/
 void calculate(uint64_t iUsec, uint64_t curTime, uint64_t lastTime) {
-  if (lastTime <= 0) {
-    printf("Run duration time error: %lu\n", lastTime);
-    return;
-  }
   // 备份上次汇总结果并清空
   memcpy(&m_AllResultLast, &m_AllResultHistory, sizeof(TResult));
   memset(&m_AllResultHistory, 0, sizeof(TResult));
