@@ -134,11 +134,13 @@ int64_t VirtualClient::tcpReadComplete(const char* pData, int64_t unDataLen,
   if (unDataLen < static_cast<int>(sizeof(int)) * 2)
     return 0;
 
+  // 没有长度头，认为已经读完
   int64_t iMsgTag = ntohl(*pData);
   if (iMsgTag != 0x4E534153) {  // SASN ,equ(=) fast than memcmp
-    return -1;
+    return unDataLen;
   }
 
+  // 有长度头，根据头判断是否读完
   int64_t iMsgLen = ntohl(*pData + 1);
   iPkgTheoryLen = iMsgLen;
 
