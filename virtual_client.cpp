@@ -210,7 +210,7 @@ bool VirtualClient::connectServer(TConfig* g_Config) {
   //   对于非阻塞socket，如果closesocket不能立即完成，则马上返回错误WSAEWOULDBLOCK。
   struct linger m_sLinger;
   m_sLinger.l_onoff = 1;
-  m_sLinger.l_linger = 1;
+  m_sLinger.l_linger = g_Config->m_iLingerTime;
   int res = setsockopt(m_isocket, SOL_SOCKET, SO_LINGER, &m_sLinger, sizeof(linger));
   if (res < 0) {
     snprintf(m_szErrMsg, sizeof(m_szErrMsg), "set SO_LINGER: %s[%d]", strerror(errno), __LINE__);
@@ -331,11 +331,11 @@ void VirtualClient::disconnect() {
     int tmp_isocket = m_isocket;
     m_isocket = -1;
 
-    int result = shutdown(tmp_isocket, SHUT_RDWR);  // shutdown会出现TIME_WAIT
-    if (result != 0) {
+    //int result = shutdown(tmp_isocket, SHUT_RDWR);  // shutdown会出现TIME_WAIT
+    //if (result != 0) {
       // close是否会有TIME_WAIT跟l_linger设置有关。也可以配置net.ipv4.tcp_max_tw_buckets限制TIME_WAIT数量
-      close(tmp_isocket);
-    }
+    close(tmp_isocket);
+    //}
   }
 }
 

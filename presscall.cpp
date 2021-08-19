@@ -205,6 +205,7 @@ void initConfig(int argc, char** argv) {
       "PrintError", CFG_STRING, errLogPath, "", sizeof(errLogPath),  //
       "useDiffPort", CFG_INT, &(g_Config.m_iUseDiffPort), 0,         //
       "MsgTimeout", CFG_INT, &(g_Config.m_iTimeout), 60000000,       //
+      "LingerTime", CFG_INT, &(g_Config.m_iLingerTime), 1,           //
       "MsgLen", CFG_INT, &(g_Config.m_iLen), 0,                      //
       "GetFile", CFG_STRING, &(g_Config.m_pszGetFile), "", sizeof(g_Config.m_pszGetFile),  //
       "GetFileLen", CFG_INT, &(g_Config.m_iRecvLen), RECV_MAX_LEN - MAX_HEADER_LEN,        //
