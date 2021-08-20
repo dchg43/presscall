@@ -77,15 +77,15 @@ int VirtualClient::build_tcp_buffer(char* m_pszSendBuff, TConfig* g_Config) {
   return total_len;
 }
 
-/** 返回0，没有读完；>0读完 */
+/** 返回0，读完；>0没有读完；-1未收到完整消息头 */
 int64_t VirtualClient::httpReadComplete(const char* pData, int64_t unDataLen,
-                                        int64_t iReceivLenInBuff, int64_t& iPkgTheoryLen) {
+                                        int64_t iReceivLenInBuff, int64_t iPkgTheoryLen) {
   if (iPkgTheoryLen < 0) {
     // no head, or head not enough
     const char* pHeadEnd = strstr(pData, "\r\n\r\n");
     // 因为buff没有加\0结束符，查找到的内容有可能超过已读取的长度
     if ((pHeadEnd == NULL) || (pHeadEnd - pData + 4 > iReceivLenInBuff)) {
-      return 0;
+      return -1;
     }
 
     pHeadEnd += 4;  // +len("\r\n\r\n")
@@ -96,8 +96,8 @@ int64_t VirtualClient::httpReadComplete(const char* pData, int64_t unDataLen,
       const char* pTransfer = strstr(pData, "Transfer-Encoding:");
       // no body, return head
       if ((pTransfer == NULL) || (pTransfer > pHeadEnd)) {
-        iPkgTheoryLen = iHeadLen;
-        return iHeadLen;
+        //iPkgTheoryLen = iHeadLen;
+        return 0;
       }
 
       // chunked model
@@ -105,50 +105,48 @@ int64_t VirtualClient::httpReadComplete(const char* pData, int64_t unDataLen,
       pchunkEnd = strstr(pchunkEnd, "\r\n0\r\n\r\n");
       // 因为buff没有加\0结束符，查找到的内容有可能超过已读取的长度
       if (pchunkEnd == NULL || pchunkEnd - pData + 7 > iReceivLenInBuff) {
-        return 0;
+        return -1;
       }
-      return unDataLen;
+      return 0;
     }
 
     // Content-Length model
     int64_t iBodyLen = unDataLen - iHeadLen;
     int64_t iContentLength = atoll(pContentLength + 15);  // +len("Content-Length:")
     if (iBodyLen < iContentLength) {
-      iPkgTheoryLen = iHeadLen + iContentLength;
-      return 0;
+      //iPkgTheoryLen = iHeadLen + iContentLength;
+      return iHeadLen + iContentLength;
     } else {
-      return unDataLen;
+      return 0;
     }
   } else {
     if (unDataLen < iPkgTheoryLen) {
-      return 0;
+      return iPkgTheoryLen;
     } else {
-      return unDataLen;
+      return 0;
     }
   }
 }
 
-/** 返回0，没有读完；>0读完 */
+/** 返回0，读完；>0没有读完；-1未收到完整消息头 */
 int64_t VirtualClient::tcpReadComplete(const char* pData, int64_t unDataLen,
-                                       int64_t iReceivLenInBuff, int64_t& iPkgTheoryLen) {
+                                       int64_t iReceivLenInBuff, int64_t iPkgTheoryLen) {
   if (unDataLen < static_cast<int>(sizeof(int)) * 2)
-    return 0;
+    return -1;
 
   // 没有长度头，认为已经读完
   int64_t iMsgTag = ntohl(*pData);
   if (iMsgTag != 0x4E534153) {  // SASN ,equ(=) fast than memcmp
-    return unDataLen;
+    return 0;
   }
 
   // 有长度头，根据头判断是否读完
   int64_t iMsgLen = ntohl(*pData + 1);
-  iPkgTheoryLen = iMsgLen;
-
-  if (iPkgTheoryLen <= unDataLen) {
-    return iPkgTheoryLen;
+  if (iMsgLen <= unDataLen) {
+    return 0;
   }
 
-  return 0;
+  return iMsgLen;
 }
 
 int VirtualClient::checkHttpResponse(const char* m_pszRecvBuff, int64_t unDataLen, int lastRead) {
@@ -409,7 +407,7 @@ int VirtualClient::tcpRead(char* pBuff, int64_t iBufLen) {
         return -1;
       }
     }
-  } while (isReadComplete(pBuff, iReceivLen, iReceivLenInBuff, iResponseLen) == 0);
+  } while ((iResponseLen = isReadComplete(pBuff, iReceivLen, iReceivLenInBuff, iResponseLen)) != 0);
   if (iReceivLen < iBufLen) {
     pBuff[iReceivLen] = '\0';
   }

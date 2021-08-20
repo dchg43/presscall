@@ -28,7 +28,7 @@ class VirtualClient {
   virtual bool reconnect() = 0;
   /** 返回0，没有读完；>0读完 */
   virtual int64_t isReadComplete(const char* pData, int64_t unDataLen, int64_t iReceivLenInBuff,
-                                 int64_t& iPkgTheoryLen) = 0;
+                                 int64_t iPkgTheoryLen) = 0;
   /** 0:无响应 1:成功 -1:失败 */
   virtual int checkResponse(const char* recvData, int64_t unDataLen, int lastRead) = 0;
   virtual int readonce(char* pBuff, int64_t iLen) = 0;
@@ -64,9 +64,9 @@ class VirtualClient {
   int build_http_buffer(char* m_pszSendBuff, TConfig* g_Config);
   int build_tcp_buffer(char* m_pszSendBuff, TConfig* g_Config);
   int64_t httpReadComplete(const char* pData, int64_t unDataLen, int64_t iReceivLenInBuff,
-                           int64_t& iPkgTheoryLen);
+                           int64_t iPkgTheoryLen);
   int64_t tcpReadComplete(const char* pData, int64_t unDataLen, int64_t iReceivLenInBuff,
-                          int64_t& iPkgTheoryLen);
+                          int64_t iPkgTheoryLen);
   int checkHttpResponse(const char* recvData, int64_t unDataLen, int lastRead);
   int checktcpResponse(int64_t unDataLen, int lastRead);
 

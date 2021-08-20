@@ -234,8 +234,8 @@ int HttpsClient::writeonce(char* pBuff, int64_t iLen) {
   return SSL_write(ssl, pBuff, iLen);
 }
 
-/** 返回0，没有读完；>0读完 */
+/** 返回0，读完；>0没有读完 */
 int64_t HttpsClient::isReadComplete(const char* pData, int64_t unDataLen, int64_t iReceivLenInBuff,
-                                    int64_t& iPkgTheoryLen) {
+                                    int64_t iPkgTheoryLen) {
   return VirtualClient::httpReadComplete(pData, unDataLen, iReceivLenInBuff, iPkgTheoryLen);
 }
