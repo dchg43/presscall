@@ -331,9 +331,9 @@ void VirtualClient::disconnect() {
     int tmp_isocket = m_isocket;
     m_isocket = -1;
 
-    //int result = shutdown(tmp_isocket, SHUT_RDWR);  // shutdown会出现TIME_WAIT
-    //if (result != 0) {
-      // close是否会有TIME_WAIT跟l_linger设置有关。也可以配置net.ipv4.tcp_max_tw_buckets限制TIME_WAIT数量
+    // int result = shutdown(tmp_isocket, SHUT_RDWR);  // shutdown会出现TIME_WAIT
+    // if (result != 0) {
+    // close是否会有TIME_WAIT跟l_linger设置有关。也可以配置net.ipv4.tcp_max_tw_buckets限制TIME_WAIT数量
     close(tmp_isocket);
     //}
   }

@@ -9,6 +9,7 @@
 #include <arpa/inet.h>
 #include <limits.h>
 #include <netdb.h>
+#include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -46,6 +47,7 @@ struct TResult m_ResultTmp;
 TConfig g_Config;
 pthread_attr_t attr;
 
+void thread_clean_func(void* arg);
 void calculate(uint64_t iSec, uint64_t curTime, uint64_t lastTime);
 void printSummary();
 void wait_threads_exit();
@@ -58,6 +60,7 @@ void* thread_func(void* arg) {
   // TConfig* config = (TConfig*)arg;
   int iMyID = *static_cast<int*>(arg);
   thread_running[iMyID] = 1;
+  pthread_cleanup_push(thread_clean_func, &iMyID);
   // 初始化随机数产生器
   srand((unsigned)((iMyID + 1) * time(NULL)));
 
@@ -75,9 +78,15 @@ void* thread_func(void* arg) {
   try {
     pUserFunc = new CUserFunc(iMyID, &g_Config);
     pUserFunc->setTimeEnd(&isTimeEnd);
+  } catch(char* err) {
+    printf("ERR: thread %d run error: %s\n", iMyID, err);
+    delete pUserFunc;
+    thread_running[iMyID] = 0;
+    return NULL;
   } catch (...) {
     printf("ERR: thread %d can not run!\n", iMyID);
     delete pUserFunc;
+    thread_running[iMyID] = 0;
     return NULL;
   }
 
@@ -91,10 +100,14 @@ void* thread_func(void* arg) {
     // 执行
     try {
       llRspTimeUs = pUserFunc->DoOnce();
+    } catch(char* err) {
+      llRspTimeUs = 0;
+      printf("ERR: thread %d run error: %s\n", iMyID, err);
+      usSleep(100000);
     } catch (...) {
       llRspTimeUs = 0;
       printf("ERR: thread %d run error!\n", iMyID);
-      throw;
+      usSleep(100000);
     }
 
     // 上报单位时间结果, 用于周期性打印
@@ -132,14 +145,22 @@ void* thread_func(void* arg) {
       usSleep(g_Config.m_iThreadSleepUs);
   }
 
-  thread_running[iMyID] = 0;
   delete pUserFunc;
+  pthread_cleanup_pop(1);
   return NULL;
 }
 
+/**
+ 用于线程结束时处理线程标识
+ */
+void thread_clean_func(void* arg) {
+  int threadID = *static_cast<int*>(arg);
+  thread_running[threadID] = 0;
+}
+  
 /*****************************************************************************
- 函 数 名  : thread_func
- 功能描述  : 线程函数
+ 函 数 名  : child_func
+ 功能描述  : 创建线程函数
 *****************************************************************************/
 void* child_func(void* arg) {
   // int iMyID = *static_cast<int*>(arg);
@@ -326,7 +347,7 @@ void normally_config() {
          g_Config.m_iLongConn, g_Config.m_iLen, g_Config.m_iThreadSleepUs, g_Config.m_iRunDuration,
          g_Config.m_iTimeLevel1, g_Config.m_iTimeLevel2, g_Config.m_iTimeLevel3);
 
-  if(g_Config.m_iSampleUs > 0) {
+  if (g_Config.m_iSampleUs > 0) {
     g_Config.m_iSampleUs = g_Config.m_iSampleUs * 1000000;
   } else {
     g_Config.m_iSampleUs = 1000000;
@@ -562,10 +583,12 @@ void calculate(uint64_t iUsec, uint64_t curTime, uint64_t lastTime) {
       percentStr, sizeof(percentStr), "%lu/%lu/%lu/%lu=%.2f%%", m_ResultTmp.iOkResponseNum,
       m_ResultTmp.iNoResponseNum, m_ResultTmp.iBadResponseNum, m_ResultTmp.iAllReqNum,
       m_ResultTmp.iAllReqNum > 0 ? m_ResultTmp.iOkResponseNum * 100.0 / m_ResultTmp.iAllReqNum : 0);
+  // localtime非多线程安全，localtime_r多线程安全但有锁的性能问题
   time_t time = curTime / 1000000;
-  struct tm* p_tm_time = localtime(&time);
-  printf("%02d:%02d:%02d  %-28s% 10.2f% 11.3fms% 11.3fms %7lu %7lu %7lu %7lu\n", p_tm_time->tm_hour,
-         p_tm_time->tm_min, p_tm_time->tm_sec, percentStr,
+  struct tm p_tm_time;
+  localtime_r(&time, &p_tm_time);
+  printf("%02d:%02d:%02d  %-28s% 10.2f% 11.3fms% 11.3fms %7lu %7lu %7lu %7lu\n", p_tm_time.tm_hour,
+         p_tm_time.tm_min, p_tm_time.tm_sec, percentStr,
          m_ResultTmp.iOkResponseNum / (lastTime / 1000000.0),
          m_ResultTmp.iOkResponseNum > 0
              ? m_ResultTmp.dSumRspTimeUs / 1000.0 / m_ResultTmp.iOkResponseNum

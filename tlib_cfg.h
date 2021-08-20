@@ -55,7 +55,7 @@ typedef struct {
   // 4.maxTimeout最大不超过70秒
   int64_t m_iTimeout;  // MsgTimeout
   // close timeout. 设置linger的超时时间，0非正常关闭连接
-  int m_iLingerTime;   // LingerTime
+  int m_iLingerTime;  // LingerTime
   volatile int64_t m_maxTime;
   volatile int64_t m_maxTimeout;
 
@@ -69,7 +69,6 @@ typedef struct {
   char m_clientKey[256];   // ClientKey
   char m_tlsProtocol[16];  // ssl_protocol
   char m_tlsCiphers[512];  // ssl_ciphers
-
 } TConfig;
 
 typedef struct {

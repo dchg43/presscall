@@ -175,35 +175,6 @@ bool HttpsClient::connectServer(TConfig* g_Config) {
     return false;
   }
 
-  /* 使用证书 */
-  /*    if (!SSL_CTX_load_verify_locations(ctx,  "/root/.ssh/ca-chain.cert.pem",
-     NULL)) {
-          //ERR_print_errors_fp(stderr);
-          return false;
-      }
-      if (SSL_CTX_use_PrivateKey_file(ctx, "/root/.ssh/client.key.pem",
-     SSL_FILETYPE_PEM) <= 0) {
-          //SSL_CTX_free (ctx);
-          //ERR_print_errors_fp(stderr);
-          return false;
-      }
-      if (!SSL_CTX_use_certificate_file(ctx, "/root/.ssh/client.cert.pem",
-     SSL_FILETYPE_PEM)) {
-          snprintf(m_szErrMsg,sizeof(m_szErrMsg),"SSL_CTX_use_certificate_file
-     ERROR");
-          //ERR_print_errors_fp(stderr);
-          return false;
-      }
-      if (!SSL_CTX_check_private_key(ctx)) {
-          //ERR_print_errors_fp(stdout);
-          return false;
-      }
-      if (SSL_get_verify_result(ssl) != X509_V_OK) {
-          snprintf(m_szErrMsg,sizeof(m_szErrMsg),"X509证书无效");
-          return false;
-      }
-  */
-
   /* 关联socket */
   int retVal = SSL_set_fd(ssl, getSocket());
   if (retVal != 1) {

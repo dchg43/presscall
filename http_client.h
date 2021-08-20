@@ -1,5 +1,5 @@
 /**
- @Copyright (c) 2019, chaoguo All rights reserved.
+  @Copyright (c) 2019, chaoguo All rights reserved.
 */
 #ifndef PRESSCALL_ALL_IN_ONE_HTTP_CLIENT_H_
 #define PRESSCALL_ALL_IN_ONE_HTTP_CLIENT_H_
