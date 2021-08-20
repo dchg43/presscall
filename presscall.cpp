@@ -9,7 +9,6 @@
 #include <arpa/inet.h>
 #include <limits.h>
 #include <netdb.h>
-#include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -37,9 +36,7 @@ struct TResult m_AllResultLast;
 // 每user呼叫结果组，每个线程写，主线程读
 struct TResult* Results_Now = NULL;
 // 线程组
-pthread_t* threads_array = NULL;
-// 线程ID
-int* thread_ids = NULL;
+struct ThreadArray* threads_array = NULL;
 int* thread_running = NULL;
 // 单位时间结果的汇总值和临时变量
 struct TResult m_ResultTmp;
@@ -59,6 +56,9 @@ void wait_threads_exit();
 void* thread_func(void* arg) {
   // TConfig* config = (TConfig*)arg;
   int iMyID = *static_cast<int*>(arg);
+  if (threads_array[iMyID].call_numbers == 0) {
+    return NULL;
+  }
   thread_running[iMyID] = 1;
   pthread_cleanup_push(thread_clean_func, &iMyID);
   // 初始化随机数产生器
@@ -78,7 +78,7 @@ void* thread_func(void* arg) {
   try {
     pUserFunc = new CUserFunc(iMyID, &g_Config);
     pUserFunc->setTimeEnd(&isTimeEnd);
-  } catch(char* err) {
+  } catch (char* err) {
     printf("ERR: thread %d run error: %s\n", iMyID, err);
     delete pUserFunc;
     thread_running[iMyID] = 0;
@@ -100,7 +100,7 @@ void* thread_func(void* arg) {
     // 执行
     try {
       llRspTimeUs = pUserFunc->DoOnce();
-    } catch(char* err) {
+    } catch (char* err) {
       llRspTimeUs = 0;
       printf("ERR: thread %d run error: %s\n", iMyID, err);
       usSleep(100000);
@@ -141,8 +141,17 @@ void* thread_func(void* arg) {
     }
     // else{} // -2说明未建立连接，不统计
 
-    if (g_Config.m_iThreadSleepUs > 0)
+    if (g_Config.m_iThreadSleepUs > 0) {
       usSleep(g_Config.m_iThreadSleepUs);
+    }
+    if (threads_array[iMyID].call_numbers >= 0) {
+      if(llRspTimeUs >= -1) {
+        threads_array[iMyID].call_numbers--;
+        if (threads_array[iMyID].call_numbers <= 0) {
+          break;
+        }
+      }
+    }
   }
 
   delete pUserFunc;
@@ -157,7 +166,7 @@ void thread_clean_func(void* arg) {
   int threadID = *static_cast<int*>(arg);
   thread_running[threadID] = 0;
 }
-  
+
 /*****************************************************************************
  函 数 名  : child_func
  功能描述  : 创建线程函数
@@ -166,13 +175,25 @@ void* child_func(void* arg) {
   // int iMyID = *static_cast<int*>(arg);
   // 栈大小最小值16384，即16KB，默认8MB
   int ret, realThreadNum = 0;
+  int callPerThread = -1, remain = -1;
+  if (g_Config.m_iCallNumbers > 0) {
+    callPerThread = g_Config.m_iCallNumbers / g_Config.m_iThreadNum;
+    remain = g_Config.m_iCallNumbers - callPerThread * g_Config.m_iThreadNum;
+  }
   isStarted = true;
   // 创建线程
   for (int i = 0; i < g_Config.m_iThreadNum; i++) {
-    thread_ids[i] = i;
-    ret = pthread_create(&threads_array[i], &attr, thread_func, &thread_ids[i]);
+    if (i < remain) {
+      threads_array[i].call_numbers = callPerThread + 1;
+    } else {
+      threads_array[i].call_numbers = callPerThread;
+    }
+
+    threads_array[i].thread_id = i;
+    ret = pthread_create(&threads_array[i].thread_pid, &attr, thread_func,
+                         &threads_array[i].thread_id);
     if (ret != 0) {
-      threads_array[i] = 0;
+      threads_array[i].thread_pid = 0;
       if (g_Config.m_iPrintError) {
         char temp[64];
         snprintf(temp, sizeof(temp), "create thread failed :%d[%d]\n", ret, i);
@@ -199,6 +220,17 @@ void* child_func(void* arg) {
       g_Config.m_iTimeLevel3 / 1000);
   fflush(stdout);
 
+  if (g_Config.m_iCallNumbers > 0) {
+    // 等待线程结束
+    for (int i = 0; i < g_Config.m_iThreadNum; i++) {
+      void* joinError = NULL;
+      if (thread_running[i] > 0 && pthread_join(threads_array[i].thread_pid, &joinError) != 0) {
+        i--;             // 继续等该线程
+        usSleep(10000);  // sleep 10ms
+      }
+    }
+    isTimeEnd = true;
+  }
   return NULL;
 }
 
@@ -220,6 +252,7 @@ void initConfig(int argc, char** argv) {
       "ThreadNum", CFG_INT, &(g_Config.m_iThreadNum), 1,             // Thread number
       "ThreadSleepMs", CFG_INT, &(g_Config.m_iThreadSleepUs), 0,     // sleep time
       "RunDuration", CFG_INT, &(g_Config.m_iRunDuration), 5,         // run time
+      "CallNumbers", CFG_INT, &(g_Config.m_iCallNumbers), 0,         // Call Numbers
       "SampleSecs", CFG_INT, &(g_Config.m_iSampleUs), 5,             //
       "TestMode", CFG_INT, &(g_Config.m_test_mode), 1,               //
       "LongConnection", CFG_INT, &(g_Config.m_iLongConn), 1,         //
@@ -456,11 +489,11 @@ int main(int argc, char** argv) {
 
   // ----数据初始化
   Results_Now = new TResult[g_Config.m_iThreadNum];
-  threads_array = new pthread_t[g_Config.m_iThreadNum];
-  thread_ids = new int[g_Config.m_iThreadNum];
+  threads_array = new ThreadArray[g_Config.m_iThreadNum];
   thread_running = new int[g_Config.m_iThreadNum];
   for (int i = 0; i < g_Config.m_iThreadNum; i++) {
     memset(&Results_Now[i], 0, sizeof(TResult));
+    memset(&threads_array[i], 0, sizeof(ThreadArray));
   }
 
   // 栈大小最小值16384，即16KB，默认8MB
@@ -523,7 +556,6 @@ int main(int argc, char** argv) {
   destroyEnd(&g_Config);
   pthread_attr_destroy(&attr); /* 不再使用线程属性，将其销毁 */
   delete[] threads_array;
-  delete[] thread_ids;
   delete[] thread_running;
   delete[] Results_Now;
   exit(0);
@@ -599,16 +631,18 @@ void calculate(uint64_t iUsec, uint64_t curTime, uint64_t lastTime) {
 }
 
 void wait_threads_exit() {
-  // 发送信号，使线程停止sleep
-  int i;
-  for (i = 0; i < g_Config.m_iThreadNum; i++) {
-    if (thread_running[i] > 0) {
-      pthread_kill(threads_array[i], SIGPIPE);  // kill -13
+  if (g_Config.m_iCallNumbers <= 0) {
+    // 发送信号，使线程停止sleep
+    for (int i = 0; i < g_Config.m_iThreadNum; i++) {
+      if (thread_running[i] > 0) {
+        pthread_kill(threads_array[i].thread_pid, SIGPIPE);  // kill -13
+      }
     }
   }
 
   // 等待线程结束或超时
   int waitTime = 10000;  // 10ms
+  int i;
   for (i = 0; i < g_Config.m_iThreadNum; i++) {
     // 如果线程存在，继续等待。ESRCH: 线程不存在，EINVAL：信号不合法
     if (thread_running[i] > 0) {
@@ -637,8 +671,8 @@ void wait_threads_exit() {
         }
 
         // 线程中没有中断的情况下会导致cancel不生效，改用kill
-        // pthread_cancel(threads_array[i]);
-        pthread_kill(threads_array[i], SIGKILL);  // kill -9
+        // pthread_cancel(threads_array[i].thread_pid);
+        pthread_kill(threads_array[i].thread_pid, SIGKILL);  // kill -9
       }
     }
   } catch (...) {
@@ -650,7 +684,7 @@ void wait_threads_exit() {
   // 等待线程结束
   for (; left < g_Config.m_iThreadNum; left++) {
     void* joinError = NULL;
-    if (thread_running[left] > 0 && pthread_join(threads_array[left], &joinError) != 0) {
+    if (thread_running[left] > 0 && pthread_join(threads_array[left].thread_pid, &joinError) != 0) {
       left--;  // 继续等该线程
       if (g_Config.m_iPrintError) {
         char temp[150];

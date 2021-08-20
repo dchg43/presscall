@@ -35,6 +35,8 @@ typedef struct {
   int m_iThreadSleepUs;  // ThreadSleepMs
   int m_test_mode;       // TestMode
 
+  // close timeout. 设置linger的超时时间，0非正常关闭连接
+  int m_iLingerTime;   // LingerTime
   int m_iLongConn;     // LongConnection
   int m_iPrintError;   // PrintError
   int m_iUseDiffPort;  // useDiffPort
@@ -45,7 +47,8 @@ typedef struct {
   int m_iTimeLevel3;   // RspTimeLevel3
   FILE* errLogOut;     // error log out file
   struct sockaddr* sockAddr;
-  int64_t m_iRunDuration;  // RunMins
+  int64_t m_iRunDuration;  // RunDuration
+  int64_t m_iCallNumbers;  // CallNumbers
   int64_t m_iSampleUs;     // SampleSecs
 
   // 超时时间机制：
@@ -54,8 +57,6 @@ typedef struct {
   // 3.超时时间1分钟更新一次，使用上一分钟的maxTimeout
   // 4.maxTimeout最大不超过70秒
   int64_t m_iTimeout;  // MsgTimeout
-  // close timeout. 设置linger的超时时间，0非正常关闭连接
-  int m_iLingerTime;  // LingerTime
   volatile int64_t m_maxTime;
   volatile int64_t m_maxTimeout;
 

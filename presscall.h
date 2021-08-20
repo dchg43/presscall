@@ -4,6 +4,7 @@
 #ifndef PRESSCALL_ALL_IN_ONE_PRESSCALL_H_
 #define PRESSCALL_ALL_IN_ONE_PRESSCALL_H_
 
+#include <pthread.h>
 #include <stdint.h>
 
 struct TResult {
@@ -18,6 +19,12 @@ struct TResult {
   uint64_t m_iTimeL2Num;
   uint64_t m_iTimeL3Num;
   uint64_t m_iTimeL4Num;
+};
+
+struct ThreadArray {
+  int thread_id;
+  pthread_t thread_pid;
+  volatile int64_t call_numbers;
 };
 
 #endif  // PRESSCALL_ALL_IN_ONE_PRESSCALL_H_

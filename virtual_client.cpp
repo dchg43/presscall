@@ -96,7 +96,7 @@ int64_t VirtualClient::httpReadComplete(const char* pData, int64_t unDataLen,
       const char* pTransfer = strstr(pData, "Transfer-Encoding:");
       // no body, return head
       if ((pTransfer == NULL) || (pTransfer > pHeadEnd)) {
-        //iPkgTheoryLen = iHeadLen;
+        // iPkgTheoryLen = iHeadLen;
         return 0;
       }
 
@@ -114,7 +114,7 @@ int64_t VirtualClient::httpReadComplete(const char* pData, int64_t unDataLen,
     int64_t iBodyLen = unDataLen - iHeadLen;
     int64_t iContentLength = atoll(pContentLength + 15);  // +len("Content-Length:")
     if (iBodyLen < iContentLength) {
-      //iPkgTheoryLen = iHeadLen + iContentLength;
+      // iPkgTheoryLen = iHeadLen + iContentLength;
       return iHeadLen + iContentLength;
     } else {
       return 0;
