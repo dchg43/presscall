@@ -48,6 +48,7 @@ void thread_clean_func(void* arg);
 void calculate(uint64_t iSec, uint64_t curTime, uint64_t lastTime);
 void printSummary();
 void wait_threads_exit();
+int sleepAndCheck(int64_t sleepEndTimeUs, int64_t curTime);
 
 /*****************************************************************************
  函 数 名  : thread_func
@@ -141,16 +142,16 @@ void* thread_func(void* arg) {
     }
     // else{} // -2说明未建立连接，不统计
 
-    if (g_Config.m_iThreadSleepUs > 0) {
-      usSleep(g_Config.m_iThreadSleepUs);
-    }
     if (threads_array[iMyID].call_numbers >= 0) {
-      if(llRspTimeUs >= -1) {
+      if (llRspTimeUs >= -1) {
         threads_array[iMyID].call_numbers--;
         if (threads_array[iMyID].call_numbers <= 0) {
           break;
         }
       }
+    }
+    if (g_Config.m_iThreadSleepUs > 0) {
+      usSleep(g_Config.m_iThreadSleepUs);
     }
   }
 
@@ -220,17 +221,6 @@ void* child_func(void* arg) {
       g_Config.m_iTimeLevel3 / 1000);
   fflush(stdout);
 
-  if (g_Config.m_iCallNumbers > 0) {
-    // 等待线程结束
-    for (int i = 0; i < g_Config.m_iThreadNum; i++) {
-      void* joinError = NULL;
-      if (thread_running[i] > 0 && pthread_join(threads_array[i].thread_pid, &joinError) != 0) {
-        i--;             // 继续等该线程
-        usSleep(10000);  // sleep 10ms
-      }
-    }
-    isTimeEnd = true;
-  }
   return NULL;
 }
 
@@ -528,7 +518,7 @@ int main(int argc, char** argv) {
     sleepEndTimeUs += g_Config.m_iSampleUs;
     curTime = getCurrentTimeUs();
     if (sleepEndTimeUs > curTime) {
-      if (usSleep(sleepEndTimeUs - curTime) < 0) {
+      if (sleepAndCheck(sleepEndTimeUs, curTime) < 0) {
         // sleep被打断
         sleepEndTimeUs = getCurrentTimeUs();
       }
@@ -561,6 +551,40 @@ int main(int argc, char** argv) {
   exit(0);
 }
 
+/*****************************************************************************
+ 功能描述  : sleep并同时检测子线程是否结束, -1未sleep完成即结束，0完成
+*****************************************************************************/
+int sleepAndCheck(int64_t sleepEndTimeUs, int64_t curTime) {
+  if (g_Config.m_iCallNumbers <= 0) {
+    if (usSleep(sleepEndTimeUs - curTime) < 0) {
+      // sleep被打断
+      return -1;
+    }
+    return 0;
+  }
+  while (curTime < sleepEndTimeUs) {
+    if (usSleep(tmin(sleepEndTimeUs - curTime, 50000)) < 0) {  // 50000=50ms
+      // sleep被打断
+      return -1;
+    }
+
+    // 检测子进程是否全部退出
+    bool allEnd = true;
+    for (int i = 0; i < g_Config.m_iThreadNum; i++) {
+      if (thread_running[i] > 0) {
+        allEnd = false;
+        break;
+      }
+    }
+    if (allEnd || isTimeEnd) {
+      isTimeEnd = true;
+      return -1;
+    }
+
+    curTime = getCurrentTimeUs();
+  }
+  return 0;
+}
 /*****************************************************************************
  函 数 名  : calculate
  功能描述  : 采样函数
@@ -631,12 +655,10 @@ void calculate(uint64_t iUsec, uint64_t curTime, uint64_t lastTime) {
 }
 
 void wait_threads_exit() {
-  if (g_Config.m_iCallNumbers <= 0) {
-    // 发送信号，使线程停止sleep
-    for (int i = 0; i < g_Config.m_iThreadNum; i++) {
-      if (thread_running[i] > 0) {
-        pthread_kill(threads_array[i].thread_pid, SIGPIPE);  // kill -13
-      }
+  // 发送信号，使线程停止sleep
+  for (int i = 0; i < g_Config.m_iThreadNum; i++) {
+    if (thread_running[i] > 0) {
+      pthread_kill(threads_array[i].thread_pid, SIGPIPE);  // kill -13
     }
   }
 
