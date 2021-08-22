@@ -58,8 +58,10 @@ void* thread_func(void* arg) {
   // TConfig* config = (TConfig*)arg;
   int iMyID = *static_cast<int*>(arg);
   if (threads_array[iMyID].call_numbers == 0) {
+    thread_running[iMyID] = 0;
     return NULL;
   }
+
   thread_running[iMyID] = 1;
   pthread_cleanup_push(thread_clean_func, &iMyID);
   // 初始化随机数产生器
@@ -187,6 +189,11 @@ void* child_func(void* arg) {
     if (i < remain) {
       threads_array[i].call_numbers = callPerThread + 1;
     } else {
+      if (callPerThread == 0) {
+        // 请求数为0，不需要起线程
+        thread_running[i] = 0;
+        continue;
+      }
       threads_array[i].call_numbers = callPerThread;
     }
 
@@ -484,6 +491,7 @@ int main(int argc, char** argv) {
   for (int i = 0; i < g_Config.m_iThreadNum; i++) {
     memset(&Results_Now[i], 0, sizeof(TResult));
     memset(&threads_array[i], 0, sizeof(ThreadArray));
+    thread_running[i] = 1;
   }
 
   // 栈大小最小值16384，即16KB，默认8MB
@@ -537,6 +545,9 @@ int main(int argc, char** argv) {
   }
 
   // 等待线程结束
+  while (pthread_join(tidp, NULL) != 0) {
+    // do nothing
+  }
   wait_threads_exit();
 
   // 释放所有申请的内存
@@ -563,7 +574,7 @@ int sleepAndCheck(int64_t sleepEndTimeUs, int64_t curTime) {
     return 0;
   }
   while (curTime < sleepEndTimeUs) {
-    if (usSleep(tmin(sleepEndTimeUs - curTime, 50000)) < 0) {  // 50000=50ms
+    if (usSleep(tmin(sleepEndTimeUs - curTime, 47000)) < 0) {  // 50000=50ms
       // sleep被打断
       return -1;
     }
