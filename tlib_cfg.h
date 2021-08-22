@@ -28,10 +28,9 @@ typedef struct {
   // struct sockaddr* server;
 
   char m_szDestIp[48];   // Host
-  char m_szMethod[10];   // Method
-  uint16_t m_iDestPort;  // Port
+  char m_szMethod[16];   // Method
+  int m_iDestPort;       // Port
   int m_iThreadNum;      // ThreadNum
-
   int m_iThreadSleepUs;  // ThreadSleepMs
   int m_test_mode;       // TestMode
 
@@ -57,18 +56,15 @@ typedef struct {
   // 3.超时时间1分钟更新一次，使用上一分钟的maxTimeout
   // 4.maxTimeout最大不超过70秒
   int64_t m_iTimeout;  // MsgTimeout
-  volatile int64_t m_maxTime;
-  volatile int64_t m_maxTimeout;
 
   char m_pszGetFile[256];  // GetFile
   char m_pszHost[128];     // Domain
   char m_szSockAddr[48];
-  char m_szSockIf[16];
 
+  char m_tlsProtocol[16];  // ssl_protocol
   char m_caCert[256];      // CaCert
   char m_clientCert[256];  // ClientCert
   char m_clientKey[256];   // ClientKey
-  char m_tlsProtocol[16];  // ssl_protocol
   char m_tlsCiphers[512];  // ssl_ciphers
 } TConfig;
 

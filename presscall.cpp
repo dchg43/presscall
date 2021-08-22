@@ -252,14 +252,14 @@ void initConfig(int argc, char** argv) {
       "Port", CFG_INT, &(g_Config.m_iDestPort), 80,                                       // Port
       "ThreadNum", CFG_INT, &(g_Config.m_iThreadNum), 1,             // Thread number
       "ThreadSleepMs", CFG_INT, &(g_Config.m_iThreadSleepUs), 0,     // sleep time
-      "RunDuration", CFG_INT, &(g_Config.m_iRunDuration), 5,         // run time
-      "CallNumbers", CFG_INT, &(g_Config.m_iCallNumbers), 0,         // Call Numbers
-      "SampleSecs", CFG_INT, &(g_Config.m_iSampleUs), 5,             //
+      "RunDuration", CFG_INT64, &(g_Config.m_iRunDuration), 5,       // run time
+      "CallNumbers", CFG_INT64, &(g_Config.m_iCallNumbers), 0,       // Call Numbers
+      "SampleSecs", CFG_INT64, &(g_Config.m_iSampleUs), 5,           //
       "TestMode", CFG_INT, &(g_Config.m_test_mode), 1,               //
       "LongConnection", CFG_INT, &(g_Config.m_iLongConn), 1,         //
       "PrintError", CFG_STRING, errLogPath, "", sizeof(errLogPath),  //
       "useDiffPort", CFG_INT, &(g_Config.m_iUseDiffPort), 0,         //
-      "MsgTimeout", CFG_INT, &(g_Config.m_iTimeout), 60000000,       //
+      "MsgTimeout", CFG_INT64, &(g_Config.m_iTimeout), 60000000,     //
       "LingerTime", CFG_INT, &(g_Config.m_iLingerTime), 1,           //
       "MsgLen", CFG_INT, &(g_Config.m_iLen), 0,                      //
       "GetFile", CFG_STRING, &(g_Config.m_pszGetFile), "", sizeof(g_Config.m_pszGetFile),  //
@@ -267,7 +267,6 @@ void initConfig(int argc, char** argv) {
       "Domain", CFG_STRING, &(g_Config.m_pszHost), "", sizeof(g_Config.m_pszHost),         //
 
       "SockAddress", CFG_STRING, &(g_Config.m_szSockAddr), "", sizeof(g_Config.m_szSockAddr),     //
-      "SockInterface", CFG_STRING, &(g_Config.m_szSockIf), "", sizeof(g_Config.m_szSockIf),       //
       "CaCert", CFG_STRING, &(g_Config.m_caCert), "", sizeof(g_Config.m_caCert),                  //
       "ClientCert", CFG_STRING, &(g_Config.m_clientCert), "", sizeof(g_Config.m_clientCert),      //
       "ClientKey", CFG_STRING, &(g_Config.m_clientKey), "", sizeof(g_Config.m_clientKey),         //
@@ -275,7 +274,8 @@ void initConfig(int argc, char** argv) {
       "ssl_ciphers", CFG_STRING, &(g_Config.m_tlsCiphers), "", sizeof(g_Config.m_tlsCiphers),     //
       "RspTimeLevel1", CFG_INT, &(g_Config.m_iTimeLevel1), 10,                                    //
       "RspTimeLevel2", CFG_INT, &(g_Config.m_iTimeLevel2), 100,                                   //
-      "RspTimeLevel3", CFG_INT, &(g_Config.m_iTimeLevel3), 1000, NULL);
+      "RspTimeLevel3", CFG_INT, &(g_Config.m_iTimeLevel3), 1000,                                  //
+      NULL);
 
   char tmp[256];
   if (g_Config.m_caCert[0] != '/') {
@@ -381,7 +381,7 @@ void normally_config() {
          g_Config.m_iLongConn, g_Config.m_iLen, g_Config.m_iThreadSleepUs, g_Config.m_iRunDuration,
          g_Config.m_iTimeLevel1, g_Config.m_iTimeLevel2, g_Config.m_iTimeLevel3);
 
-  if (g_Config.m_iSampleUs > 0) {
+  if (g_Config.m_iSampleUs > 0 && LLONG_MAX / 1000000 > g_Config.m_iSampleUs) {
     g_Config.m_iSampleUs = g_Config.m_iSampleUs * 1000000;
   } else {
     g_Config.m_iSampleUs = 1000000;
@@ -518,7 +518,7 @@ int main(int argc, char** argv) {
 
   int64_t runStartTime, curTime, sleepEndTimeUs, runEndTime;
   curTime = runStartTime = sleepEndTimeUs = getCurrentTimeUs();
-  if (g_Config.m_iRunDuration == 0) {
+  if (g_Config.m_iRunDuration <= 0 || g_Config.m_iRunDuration > (LLONG_MAX - curTime) / 1000000) {
     runEndTime = LLONG_MAX;
   } else {
     runEndTime = curTime + g_Config.m_iRunDuration * 1000000;
