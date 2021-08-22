@@ -44,6 +44,7 @@ struct TResult m_ResultTmp;
 TConfig g_Config;
 pthread_attr_t attr;
 
+void report_result(int64_t llRspTimeUs, int iMyID);
 void thread_clean_func(void* arg);
 void calculate(uint64_t iSec, uint64_t curTime, uint64_t lastTime);
 void printSummary();
@@ -112,40 +113,10 @@ void* thread_func(void* arg) {
       printf("ERR: thread %d run error!\n", iMyID);
       usSleep(100000);
     }
-
-    // 上报单位时间结果, 用于周期性打印
-    if (llRspTimeUs > 0) {
-      Results_Now[iMyID].iAllReqNum++;
-      Results_Now[iMyID].iOkResponseNum++;
-
-      if (llRspTimeUs > g_Config.m_iTimeLevel3) {
-        Results_Now[iMyID].m_iTimeL4Num++;
-      } else if (llRspTimeUs > g_Config.m_iTimeLevel2) {
-        Results_Now[iMyID].m_iTimeL3Num++;
-      } else if (llRspTimeUs > g_Config.m_iTimeLevel1) {
-        Results_Now[iMyID].m_iTimeL2Num++;
-      } else {
-        Results_Now[iMyID].m_iTimeL1Num++;
-      }
-
-      Results_Now[iMyID].dSumRspTimeUs += llRspTimeUs;
-      if (Results_Now[iMyID].resetMaxTime) {
-        Results_Now[iMyID].llMaxRspTimeUs = llRspTimeUs;
-        Results_Now[iMyID].resetMaxTime = false;
-      } else if (llRspTimeUs > Results_Now[iMyID].llMaxRspTimeUs) {
-        Results_Now[iMyID].llMaxRspTimeUs = llRspTimeUs;
-      }
-    } else if (llRspTimeUs == -1) {
-      Results_Now[iMyID].iAllReqNum++;
-      Results_Now[iMyID].iBadResponseNum++;
-    } else if (llRspTimeUs == 0) {
-      Results_Now[iMyID].iAllReqNum++;
-      Results_Now[iMyID].iNoResponseNum++;
-    }
-    // else{} // -2说明未建立连接，不统计
+    report_result(llRspTimeUs, iMyID);
 
     if (threads_array[iMyID].call_numbers >= 0) {
-      if (llRspTimeUs >= -1) {
+      if (llRspTimeUs >= -1) {  // -2说明未建立连接，不统计
         threads_array[iMyID].call_numbers--;
         if (threads_array[iMyID].call_numbers <= 0) {
           break;
@@ -160,6 +131,39 @@ void* thread_func(void* arg) {
   delete pUserFunc;
   pthread_cleanup_pop(1);
   return NULL;
+}
+
+/** 上报单位时间结果, 用于周期性打印 */
+void report_result(int64_t llRspTimeUs, int iMyID) {
+  if (llRspTimeUs > 0) {
+    Results_Now[iMyID].iAllReqNum++;
+    Results_Now[iMyID].iOkResponseNum++;
+
+    if (llRspTimeUs > g_Config.m_iTimeLevel3) {
+      Results_Now[iMyID].m_iTimeL4Num++;
+    } else if (llRspTimeUs > g_Config.m_iTimeLevel2) {
+      Results_Now[iMyID].m_iTimeL3Num++;
+    } else if (llRspTimeUs > g_Config.m_iTimeLevel1) {
+      Results_Now[iMyID].m_iTimeL2Num++;
+    } else {
+      Results_Now[iMyID].m_iTimeL1Num++;
+    }
+
+    Results_Now[iMyID].dSumRspTimeUs += llRspTimeUs;
+    if (Results_Now[iMyID].resetMaxTime) {
+      Results_Now[iMyID].llMaxRspTimeUs = llRspTimeUs;
+      Results_Now[iMyID].resetMaxTime = false;
+    } else if (llRspTimeUs > Results_Now[iMyID].llMaxRspTimeUs) {
+      Results_Now[iMyID].llMaxRspTimeUs = llRspTimeUs;
+    }
+  } else if (llRspTimeUs == -1) {
+    Results_Now[iMyID].iAllReqNum++;
+    Results_Now[iMyID].iBadResponseNum++;
+  } else if (llRspTimeUs == 0) {
+    Results_Now[iMyID].iAllReqNum++;
+    Results_Now[iMyID].iNoResponseNum++;
+  }
+  // else{} // -2说明未建立连接，不统计
 }
 
 /**
