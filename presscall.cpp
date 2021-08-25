@@ -487,6 +487,7 @@ int main(int argc, char** argv) {
   signal(SIGQUIT, sigQUIT);  // kill -3
   signal(SIGKILL, sigQUIT);  // kill -9
   signal(SIGTERM, sigQUIT);  // kill -15
+  // signal(SIGTSTP, sigQUIT);  // kill -20 可捕获的stop信号，因为可以用CONT信号继续运行，不需处理
 
   // ----数据初始化
   Results_Now = new TResult[g_Config.m_iThreadNum];
@@ -578,7 +579,7 @@ int sleepAndCheck(int64_t sleepEndTimeUs, int64_t curTime) {
     return 0;
   }
   while (curTime < sleepEndTimeUs) {
-    if (usSleep(tmin(sleepEndTimeUs - curTime, 47000)) < 0) {  // 50000=50ms
+    if (usSleep(tmin(sleepEndTimeUs - curTime, 9000)) < 0) {  // 10000=10ms
       // sleep被打断
       return -1;
     }
