@@ -483,7 +483,9 @@ int main(int argc, char** argv) {
   }
   signal(SIGHUP, sigQUIT);   // 1 终端关闭
   signal(SIGINT, sigQUIT);   // 2 ctrl+C
-  signal(SIGPIPE, sigPIPE);  // 13 管道写错误,连接异常断开,不退出
+  // 当目标机器的socket已经关闭连接时，再调用write()发送数据会收到一个RST响应，
+  // 第二次调用write()发送数据时会先调用SIGPIPE响应函数，然后write返回-1,errno号为EPIPE(32) 
+  signal(SIGPIPE, sigPIPE);  // 13  
   signal(SIGQUIT, sigQUIT);  // kill -3
   signal(SIGKILL, sigQUIT);  // kill -9
   signal(SIGTERM, sigQUIT);  // kill -15

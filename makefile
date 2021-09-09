@@ -18,10 +18,9 @@ TARGET = presscall
 $(TARGET): $(OBJ)
 	g++ $(CFLAGS) $(LIB) -o $@ $^
 
-%.o: %.cpp
+%.o: %.cpp %.h
 	g++ $(CFLAGS) $(INC) -c -o $@ $<
 
 clean:
-	rm -f *.o
-	rm -f $(TARGET)
+	rm -f *.o $(TARGET)
 
