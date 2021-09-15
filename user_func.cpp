@@ -97,6 +97,8 @@ CUserFunc::~CUserFunc() {
 
 /** 执行一次请求。0:无响应 >=1:成功 -1:失败 -2:连接不成功 */
 int64_t CUserFunc::DoOnce(void) {
+  int64_t tBegin = getCurrentTimeUs();
+
   if (!m_TcpCltSocket->isConnect()) {
     if (m_TcpCltSocket->connectServer(m_Config) != true) {
       if (m_Config->m_iPrintError && !(*m_TcpCltSocket->hasTimeEnd())) {
@@ -111,7 +113,6 @@ int64_t CUserFunc::DoOnce(void) {
       return -2;
     }
   }
-  int64_t tBegin = getCurrentTimeUs();
 
   if (m_lenSendBuff != m_TcpCltSocket->tcpWrite(m_pszSendBuff, m_lenSendBuff)) {
     if (m_Config->m_iPrintError && !(*m_TcpCltSocket->hasTimeEnd())) {
@@ -124,11 +125,11 @@ int64_t CUserFunc::DoOnce(void) {
 
   int result = m_TcpCltSocket->tcpRead(m_pszRecvBuff, m_Config->m_iRecvLen);
 
-  int64_t llRspTimeUs = getCurrentTimeUs() - tBegin;
-
   if (!m_Config->m_iLongConn) {
     m_TcpCltSocket->disconnect();
   }
+
+  int64_t llRspTimeUs = getCurrentTimeUs() - tBegin;
 
   if (result > 0) {
     if (result == 2) {

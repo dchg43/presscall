@@ -363,15 +363,19 @@ int VirtualClient::tcpRead(char* pBuff, int64_t iBufLen) {
     if (iBufLen <= iReceivLen) {
       iOneReadLen = readonce(pBuff + MAX_HEADER_LEN,
                              tmin(iBufLen - MAX_HEADER_LEN, iResponseLen - iReceivLen));
-      iReceivLenInBuff = MAX_HEADER_LEN + iOneReadLen;
-      iReceivLen += iOneReadLen;
+      if(iOneReadLen > 0) {
+        iReceivLenInBuff = MAX_HEADER_LEN + iOneReadLen;
+        iReceivLen += iOneReadLen;
+      }
     } else {
       iOneReadLen = readonce(pBuff + iReceivLen, iBufLen - iReceivLen);
-      iReceivLen = iReceivLenInBuff = iReceivLen + iOneReadLen;
+      if(iOneReadLen > 0) {
+        iReceivLen = iReceivLenInBuff = iReceivLen + iOneReadLen;
+      }
     }
 
-    if (iOneReadLen <= 0) {
-      if (errno == EAGAIN) {  // 超时
+    if (iOneReadLen <= 0) {   /* 出错了 */
+      if (errno == EAGAIN) {  // 超时认为失败
         if (iReceivLen < iBufLen) {
           pBuff[iReceivLen] = '\0';
         }
@@ -407,7 +411,9 @@ int VirtualClient::tcpRead(char* pBuff, int64_t iBufLen) {
         return -1;
       }
     }
-  } while ((iResponseLen = isReadComplete(pBuff, iReceivLen, iReceivLenInBuff, iResponseLen)) != 0);
+
+    iResponseLen = isReadComplete(pBuff, iReceivLen, iReceivLenInBuff, iResponseLen);
+  } while (iResponseLen != 0);
   if (iReceivLen < iBufLen) {
     pBuff[iReceivLen] = '\0';
   }
@@ -421,7 +427,7 @@ int VirtualClient::tcpWrite(char* pBuff, int64_t iBufLen) {
     /* 开始写 */
     iWriteLen = writeonce(pBuff, iBufLen);
     if (iWriteLen <= 0) {     /* 出错了 */
-      if (errno == EAGAIN) {  // 超时
+      if (errno == EAGAIN) {  // 超时认为失败
         snprintf(m_szErrMsg, sizeof(m_szErrMsg), "write timeout, error: %s[%d]", strerror(errno),
                  __LINE__);
         disconnect();
@@ -431,7 +437,6 @@ int VirtualClient::tcpWrite(char* pBuff, int64_t iBufLen) {
           disconnect();
           break;
         }
-        iWriteLen = 0;
       } else { /* 其他错误 没有办法,只好撤退了 */
         snprintf(m_szErrMsg, sizeof(m_szErrMsg),
                  "link close by remote host!write ret=%d, error: %s[%d]", iWriteLen,
