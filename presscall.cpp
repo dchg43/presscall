@@ -223,8 +223,15 @@ void* child_func(void* arg) {
   }
   // isStarted = true;
 
-  printf("Start finished, %d threads running, will %sprint error message ...\n", realThreadNum,
-         g_Config.m_iPrintError ? "" : "not ");
+  time_t rawtime;
+  struct tm p_tm_time;
+  char str_time[32];
+  time(&rawtime);
+  localtime_r(&rawtime, &p_tm_time);
+  strftime(str_time, sizeof(str_time), "%Y-%m-%d %H:%M:%S", &p_tm_time);
+
+  printf("%s started, %d threads running, will %sprint error message ...\n", str_time,
+         realThreadNum, g_Config.m_iPrintError ? "" : "not ");
   printf(
       "\nTIME      OK/NO/BAD/ALL=PERCENT           TPS     AvgTime(ms)  MaxTime(ms) "
       " <%3dms  <%3dms  <%3dms  >%3dms\n",
@@ -312,7 +319,9 @@ void initConfig(int argc, char** argv) {
     case 1:  // 防止执行default
       break;
     default:  // 至少需要2个参数
-      printf("presscall ip port [th_num] [run_sec] [sample_sec] [time_l1] [time_l2] [time_l3]\n");
+      printf(
+          "presscall ip port [thread_num] [run_second] [print_interval] [time_l1] [time_l2] "
+          "[time_l3]\n");
       printf("example:\n");
       printf("presscall 127.0.0.1 8080\n");
       fflush(stdout);
@@ -481,11 +490,11 @@ int main(int argc, char** argv) {
     // SIG_DFL默认，SIG_IGN忽略信号
     signal(i, SIG_DFL);
   }
-  signal(SIGHUP, sigQUIT);   // 1 终端关闭
-  signal(SIGINT, sigQUIT);   // 2 ctrl+C
+  signal(SIGHUP, sigQUIT);  // 1 终端关闭
+  signal(SIGINT, sigQUIT);  // 2 ctrl+C
   // 当目标机器的socket已经关闭连接时，再调用write()发送数据会收到一个RST响应，
-  // 第二次调用write()发送数据时会先调用SIGPIPE响应函数，然后write返回-1,errno号为EPIPE(32) 
-  signal(SIGPIPE, sigPIPE);  // 13  
+  // 第二次调用write()发送数据时会先调用SIGPIPE响应函数，然后write返回-1,errno号为EPIPE(32)
+  signal(SIGPIPE, sigPIPE);  // 13
   signal(SIGQUIT, sigQUIT);  // kill -3
   signal(SIGKILL, sigQUIT);  // kill -9
   signal(SIGTERM, sigQUIT);  // kill -15

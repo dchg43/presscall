@@ -363,13 +363,13 @@ int VirtualClient::tcpRead(char* pBuff, int64_t iBufLen) {
     if (iBufLen <= iReceivLen) {
       iOneReadLen = readonce(pBuff + MAX_HEADER_LEN,
                              tmin(iBufLen - MAX_HEADER_LEN, iResponseLen - iReceivLen));
-      if(iOneReadLen > 0) {
+      if (iOneReadLen > 0) {
         iReceivLenInBuff = MAX_HEADER_LEN + iOneReadLen;
         iReceivLen += iOneReadLen;
       }
     } else {
       iOneReadLen = readonce(pBuff + iReceivLen, iBufLen - iReceivLen);
-      if(iOneReadLen > 0) {
+      if (iOneReadLen > 0) {
         iReceivLen = iReceivLenInBuff = iReceivLen + iOneReadLen;
       }
     }
