@@ -18,6 +18,7 @@ class HttpsClient : public VirtualClient {
   HttpsClient() {
     memset(m_szErrMsg, 0, sizeof(m_szErrMsg));
     ssl = NULL;
+    m_Config = NULL;
   }
   ~HttpsClient() {
     disconnect();

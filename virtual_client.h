@@ -17,7 +17,9 @@ class VirtualClient {
  public:
   VirtualClient() {
     m_isocket = -1;
+    isTimeEnd = NULL;
     cookies = NULL;
+    server = NULL;
   }
   virtual ~VirtualClient() {}
 

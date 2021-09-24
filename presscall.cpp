@@ -243,15 +243,15 @@ void* child_func(void* arg) {
 }
 
 void initConfig(int argc, char** argv) {
-  char rootpath[strlen(argv[0]) - strlen(strrchr(argv[0], '/')) + 2];
-  memcpy(rootpath, argv[0], sizeof(rootpath) - 1);
-  rootpath[sizeof(rootpath) - 1] = '\0';
+  // 获取参数
+  int rootPathLen = strlen(argv[0]) - strlen(strrchr(argv[0], '/')) + 1;
+  char* path = new char[rootPathLen + strlen(CFGFILE)];
+  memcpy(path, argv[0], rootPathLen);
+  path[rootPathLen] = '\0';
+  strncat(path, CFGFILE, strlen(CFGFILE) + 1);
 
   memset(&g_Config, 0, sizeof(g_Config));
-  // 获取参数
-  char path[strlen(argv[0]) + strlen(CFGFILE)];
   char errLogPath[120];
-  snprintf(path, sizeof(path), "%s%s", rootpath, CFGFILE);
   TLib_Cfg_GetConfig(
       path,  // config file path
       "Host", CFG_STRING, g_Config.m_szDestIp, "127.0.0.1", sizeof(g_Config.m_szDestIp),  // Host
@@ -283,6 +283,7 @@ void initConfig(int argc, char** argv) {
       "RspTimeLevel2", CFG_INT, &(g_Config.m_iTimeLevel2), 100,                                   //
       "RspTimeLevel3", CFG_INT, &(g_Config.m_iTimeLevel3), 1000,                                  //
       NULL);
+  delete[] path;
 
   char tmp[256];
   if (g_Config.m_caCert[0] != '/') {
@@ -361,7 +362,7 @@ void normally_config() {
     g_Config.m_pszGetFile[0] = '/';
   }
 
-  if (g_Config.m_pszHost == NULL || strlen(g_Config.m_pszHost) == 0) {
+  if (strlen(g_Config.m_pszHost) == 0) {
     if (strstr(g_Config.m_szDestIp, ":")) {
       snprintf(g_Config.m_pszHost, sizeof(g_Config.m_pszHost), "[%s]:%d", g_Config.m_szDestIp,
                g_Config.m_iDestPort);
@@ -430,12 +431,11 @@ void normally_ip() {
         fflush(stdout);
         exit(2);
       }
+
+      struct sockaddr_in6* client6 = new sockaddr_in6();
       if (addrList != NULL) {
-        g_Config.sockAddr = (struct sockaddr*)(addrList->ai_addr);
-        // char addrBuffer[INET6_ADDRSTRLEN];
-        // inet_ntop(AF_INET6, &((struct sockaddr_in6*)(addrList->ai_addr))->sin6_addr, addrBuffer,
-        // sizeof (addrBuffer)); printf("%s\n", addrBuffer); printf("%u\n", ntohs(((struct
-        // sockaddr_in6*)(addrList->ai_addr))->sin6_port)); addrList = addrList->ai_next;
+        memcpy(client6, (struct sockaddr*)(addrList->ai_addr), sizeof(struct sockaddr_in6));
+        freeaddrinfo(addrList);
       } else {
         struct in6_addr m_v6_src;
         if (inet_pton(AF_INET6, g_Config.m_szSockAddr, &m_v6_src) <= 0) {
@@ -443,13 +443,12 @@ void normally_ip() {
           fflush(stdout);
           exit(2);
         }
-        struct sockaddr_in6* client6 = new sockaddr_in6();
         client6->sin6_family = AF_INET6;
         client6->sin6_port = htons(0);
         client6->sin6_scope_id = 0;
         memcpy(&client6->sin6_addr, (struct in6_addr*)&m_v6_src, sizeof(m_v6_src));
-        g_Config.sockAddr = (struct sockaddr*)client6;
       }
+      g_Config.sockAddr = (struct sockaddr*)client6;
     } else {
       int m_iSrcIp = inet_addr(g_Config.m_szSockAddr);
       struct sockaddr_in* client4 = new sockaddr_in();
@@ -567,11 +566,10 @@ int main(int argc, char** argv) {
   wait_threads_exit();
 
   // 释放所有申请的内存
-  if (g_Config.errLogOut != NULL) {
-    fclose(g_Config.errLogOut);
-  }
-  destroyEnd(&g_Config);
   pthread_attr_destroy(&attr); /* 不再使用线程属性，将其销毁 */
+  fclose(g_Config.errLogOut);
+  destroyEnd(&g_Config);
+  delete g_Config.sockAddr;
   delete[] threads_array;
   delete[] thread_running;
   delete[] Results_Now;
@@ -763,11 +761,11 @@ void printSummary() {
     printf("TPS: %.2f\n", m_AllResultHistory.iOkResponseNum / (iUsecRuned / 1000000.0));
   }
 
-  float percent = 0;
+  double percent = 0;
   if (m_AllResultHistory.iAllReqNum > 0) {
-    percent = m_AllResultHistory.iOkResponseNum * 1.0 / m_AllResultHistory.iAllReqNum;
+    percent = m_AllResultHistory.iOkResponseNum * 100.0 / m_AllResultHistory.iAllReqNum;
   }
-  printf("Success percent: %.2f%%\n", percent * 100);
+  printf("Success percent: %.2f%%\n", percent);
 
   double averageResponseTime = 0;
   if (m_AllResultHistory.iOkResponseNum > 0) {

@@ -14,6 +14,7 @@ class TcpClient : public VirtualClient {
  public:
   TcpClient() {
     memset(m_szErrMsg, 0, sizeof(m_szErrMsg));
+    m_Config = NULL;
   }
   ~TcpClient() {
     disconnect();
