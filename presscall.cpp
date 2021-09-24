@@ -283,21 +283,22 @@ void initConfig(int argc, char** argv) {
       "RspTimeLevel2", CFG_INT, &(g_Config.m_iTimeLevel2), 100,                                   //
       "RspTimeLevel3", CFG_INT, &(g_Config.m_iTimeLevel3), 1000,                                  //
       NULL);
-  delete[] path;
 
+  path[rootPathLen] = '\0';
   char tmp[256];
   if (g_Config.m_caCert[0] != '/') {
     memcpy(tmp, g_Config.m_caCert, sizeof(g_Config.m_caCert));
-    snprintf(g_Config.m_caCert, sizeof(g_Config.m_caCert), "%s%s", rootpath, tmp);
+    snprintf(g_Config.m_caCert, sizeof(g_Config.m_caCert), "%s%s", path, tmp);
   }
   if (g_Config.m_clientCert[0] != '/') {
     memcpy(tmp, g_Config.m_clientCert, sizeof(g_Config.m_clientCert));
-    snprintf(g_Config.m_clientCert, sizeof(g_Config.m_clientCert), "%s%s", rootpath, tmp);
+    snprintf(g_Config.m_clientCert, sizeof(g_Config.m_clientCert), "%s%s", path, tmp);
   }
   if (g_Config.m_clientKey[0] != '/') {
     memcpy(tmp, g_Config.m_clientKey, sizeof(g_Config.m_clientKey));
-    snprintf(g_Config.m_clientKey, sizeof(g_Config.m_clientKey), "%s%s", rootpath, tmp);
+    snprintf(g_Config.m_clientKey, sizeof(g_Config.m_clientKey), "%s%s", path, tmp);
   }
+  delete[] path;
 
   /* 根据arg参数个数来判断通过命令行传入的值，每个case都不需要break语句。
      其他参数使用配置文件的值 */
