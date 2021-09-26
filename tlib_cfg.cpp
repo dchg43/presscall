@@ -16,18 +16,18 @@ int64_t getCurrentTimeUs() {
 }
 
 char* trim(char* str) {
-  char* ps = str;
-  while (*ps == ' ' || *ps == '\t' || *ps == '\r' || *ps == '\n') {
-    ps++;
-  }
-
-  char* p = ps + strlen(ps) - 1;
-  while ((*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n') && p >= ps) {
+  char* p = str + strlen(str) - 1;
+  while (p >= str && (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n')) {
     --p;
   }
   *(p + 1) = '\0';
 
-  return ps;
+  p = str;
+  while (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n') {
+    p++;
+  }
+
+  return p;
 }
 
 static void _Cfg_InitDefault(va_list ap) {
@@ -45,8 +45,7 @@ static void _Cfg_InitDefault(va_list ap) {
         sVal = va_arg(ap, char*);
         sDefault = va_arg(ap, char*);
         lSize = va_arg(ap, int32_t);
-        strncpy(sVal, sDefault, lSize - 1);
-        sVal[lSize - 1] = 0;
+        strncpy(sVal, sDefault, lSize);
         break;
       case CFG_INT64:
         plVal = va_arg(ap, int64_t*);
@@ -112,8 +111,7 @@ static void _Cfg_SetVal(va_list ap, char* sP, char* sV) {
     if (strcmp(sP, sParam) == 0) {
       switch (iType) {
         case CFG_STRING:
-          strncpy(sVal, sV, lSize - 1);
-          sVal[lSize - 1] = 0;
+          strncpy(sVal, sV, lSize);
           break;
         case CFG_INT64:
           *plVal = atoll(sV);
@@ -132,44 +130,44 @@ static void _Cfg_SetVal(va_list ap, char* sP, char* sV) {
   }
 }
 
-static int _Cfg_GetParamVal(char* sLine, char* sParam, char* sVal) {
-  char* p = sLine;
-  while (*p == ' ' || *p == '\t' || *p == '\n') {
-    p++;
-  }
-  if (*p == '#' || *p == '\0') {
-    return 1;
+static char* _Cfg_GetParamVal(char* sParam) {
+  if (*sParam == '#' || *sParam == '\0') {
+    return NULL;
   }
 
-  char* pe = p + 1;
-  while (*pe != ' ' && *pe != '\t' && *pe != '\n') {
-    pe++;
+  char* pEnd = sParam + strlen(sParam);
+  char* sVal = sParam;
+  while (*sVal != ' ' && *sVal != '\t' && *sVal != '\n' && *sVal != '\0') {
+    sVal++;
   }
-  int paramLen = pe - p;
-  strncpy(sParam, p, paramLen);
-  *(sParam + paramLen) = '\0';
+  *sVal = '\0';
 
-  pe = trim(pe);
-  strncpy(sVal, pe, strlen(pe) + 1);
+  if (sVal < pEnd) {
+    sVal++;
+    while (*sVal == ' ' || *sVal == '\t' || *sVal == '\n') {
+      sVal++;
+    }
+  }
 
-  return 0;
+  return sVal;
 }
 
 void TLib_Cfg_GetConfig(const char* sConfigFilePath, ...) {
   FILE* pstFile;
-  char sLine[MAX_CONFIG_LINE_LEN], sParam[MAX_CONFIG_LINE_LEN], sVal[MAX_CONFIG_LINE_LEN];
-  va_list ap = {};
-
-  va_start(ap, sConfigFilePath);
-  _Cfg_InitDefault(ap);
-  va_end(ap);
-
   if ((pstFile = fopen(sConfigFilePath, "r")) == NULL) {
     return;
   }
 
+  va_list ap = {};
+  va_start(ap, sConfigFilePath);
+  _Cfg_InitDefault(ap);
+  va_end(ap);
+
+  char sLine[MAX_CONFIG_LINE_LEN];
+  char *sParam, *sVal;
   while (fgets(sLine, MAX_CONFIG_LINE_LEN, pstFile) != NULL) {
-    if (_Cfg_GetParamVal(sLine, sParam, sVal) == 0) {
+    sParam = trim(sLine);
+    if ((sVal = _Cfg_GetParamVal(sParam)) != NULL) {
       va_start(ap, sConfigFilePath);
       _Cfg_SetVal(ap, sParam, sVal);
       va_end(ap);
@@ -182,27 +180,19 @@ void TLib_Cfg_GetConfig(const char* sConfigFilePath, ...) {
 
 void TLib_Cfg_GetNVConfig(const char* sConfigFilePath, TNVStu* pNVStu) {
   FILE* pstFile;
-  char sLine[MAX_CONFIG_LINE_LEN], sParam[MAX_CONFIG_LINE_LEN], sVal[MAX_CONFIG_LINE_LEN];
-
   if ((pstFile = fopen(sConfigFilePath, "r")) == NULL) {
     return;
   }
 
+  char sLine[MAX_CONFIG_LINE_LEN];
+  char *sParam, *sVal;
   int iLinePos = 0;
-  while (1) {
-    strncpy(sLine, "", 1);
-
-    fgets(sLine, sizeof(sLine), pstFile);
-    if (strcmp(sLine, "") != 0) {
-      if (_Cfg_GetParamVal(sLine, sParam, sVal) == 0) {
-        strncpy(pNVStu[iLinePos].szName, sParam, strlen(sParam) + 1);
-        strncpy(pNVStu[iLinePos].szVal, sVal, strlen(sVal) + 1);
-        iLinePos++;
-      }
-    }
-
-    if (feof(pstFile)) {
-      break;
+  while (fgets(sLine, MAX_CONFIG_LINE_LEN, pstFile) != NULL) {
+    sParam = trim(sLine);
+    if ((sVal = _Cfg_GetParamVal(sParam)) != NULL) {
+      strncpy(pNVStu[iLinePos].szName, sParam, strlen(sParam) + 1);
+      strncpy(pNVStu[iLinePos].szVal, sVal, strlen(sVal) + 1);
+      iLinePos++;
     }
   }
 
