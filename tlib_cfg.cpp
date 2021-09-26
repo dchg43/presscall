@@ -15,44 +15,19 @@ int64_t getCurrentTimeUs() {
   return curTimeVal.tv_sec * 1000000 + curTimeVal.tv_usec;
 }
 
-void _Cfg_TrimStr(char* strInput) {
-  char* pb;
-  char* pe;
-  int iTempLength;
-
-  if (strInput == NULL) {
-    return;
+char* trim(char* str) {
+  char* ps = str;
+  while (*ps == ' ' || *ps == '\t' || *ps == '\r' || *ps == '\n') {
+    ps++;
   }
 
-  iTempLength = strlen(strInput);
-  if (iTempLength == 0) {
-    return;
+  char* p = ps + strlen(ps) - 1;
+  while ((*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n') && p >= ps) {
+    --p;
   }
+  *(p + 1) = '\0';
 
-  pb = strInput;
-
-  while (((*pb == ' ') || (*pb == '\t') || (*pb == '\n') || (*pb == '\r')) && (*pb != 0)) {
-    pb++;
-  }
-
-  pe = &strInput[iTempLength - 1];
-  while ((pe >= pb) && ((*pe == ' ') || (*pe == '\t') || (*pe == '\n') || (*pe == '\r'))) {
-    pe--;
-  }
-  *(pe + 1) = '\0';
-
-  // strncpy(strInput, pb, strlen(pb) + 1);
-  // 改成下边方式，因为strInput, pb指向同一块内存，strcpy会出现覆盖，导致bug
-  /*pe = strInput;
-  while (*pb != '\0') {
-    *pe = *pb;
-    pe++;
-    pb++;
-  }
-  *pe = '\0';*/
-  memmove(strInput, pb, strlen(pb) + 1);
-
-  return;
+  return ps;
 }
 
 static void _Cfg_InitDefault(va_list ap) {
@@ -158,31 +133,24 @@ static void _Cfg_SetVal(va_list ap, char* sP, char* sV) {
 }
 
 static int _Cfg_GetParamVal(char* sLine, char* sParam, char* sVal) {
-  char *p, *sp;
-
-  p = sLine;
-  while (*p != '\0') {
-    if ((*p != ' ') && (*p != '\t') && (*p != '\n'))
-      break;
+  char* p = sLine;
+  while (*p == ' ' || *p == '\t' || *p == '\n') {
     p++;
   }
-
-  if (*p == '#' || *p == '\0')
+  if (*p == '#' || *p == '\0') {
     return 1;
-
-  sp = sParam;
-  while (*p != '\0') {
-    if ((*p == ' ') || (*p == '\t') || (*p == '\n'))
-      break;
-
-    *sp = *p;
-    p++;
-    sp++;
   }
-  *sp = '\0';
 
-  strncpy(sVal, p, strlen(p) + 1);
-  _Cfg_TrimStr(sVal);
+  char* pe = p + 1;
+  while (*pe != ' ' && *pe != '\t' && *pe != '\n') {
+    pe++;
+  }
+  int paramLen = pe - p;
+  strncpy(sParam, p, paramLen);
+  *(sParam + paramLen) = '\0';
+
+  pe = trim(pe);
+  strncpy(sVal, pe, strlen(pe) + 1);
 
   return 0;
 }
@@ -200,19 +168,14 @@ void TLib_Cfg_GetConfig(const char* sConfigFilePath, ...) {
     return;
   }
 
-  do {
-    strncpy(sLine, "", 1);
-
-    fgets(sLine, sizeof(sLine), pstFile);
-    if (strcmp(sLine, "") != 0) {
-      if (_Cfg_GetParamVal(sLine, sParam, sVal) == 0) {
-        va_start(ap, sConfigFilePath);
-        _Cfg_SetVal(ap, sParam, sVal);
-        va_end(ap);
-        // printf("'%s=%s'\n", sParam, sVal);  // 打印从文件中获取的参数
-      }
+  while (fgets(sLine, MAX_CONFIG_LINE_LEN, pstFile) != NULL) {
+    if (_Cfg_GetParamVal(sLine, sParam, sVal) == 0) {
+      va_start(ap, sConfigFilePath);
+      _Cfg_SetVal(ap, sParam, sVal);
+      va_end(ap);
+      // printf("'%s=%s'\n", sParam, sVal);  // 打印从文件中获取的参数
     }
-  } while (!feof(pstFile));
+  }
 
   fclose(pstFile);
 }
