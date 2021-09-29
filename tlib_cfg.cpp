@@ -17,13 +17,13 @@ int64_t getCurrentTimeUs() {
 
 char* trim(char* str) {
   char* p = str + strlen(str) - 1;
-  while (p >= str && (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n')) {
+  while (p >= str && (*p <= ' ')) {
     --p;
   }
   *(p + 1) = '\0';
 
   p = str;
-  while (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n') {
+  while (*p > '\0' && *p <= ' ') {
     p++;
   }
 
@@ -68,64 +68,61 @@ static void _Cfg_InitDefault(va_list ap) {
 }
 
 static void _Cfg_SetVal(va_list ap, char* sP, char* sV) {
-  char *sParam, *sVal = NULL;
-  // char *sDefault;
-  double *pdVal = NULL, dDefault;
-  int64_t* plVal = NULL;
-  // int64_t lDefault;
-  int iType, *piVal = NULL, iDefault;
-  int32_t lSize = 0;
+  char *sParam, *sVal;
+  double* pdVal;
+  int64_t* plVal;
+  int iType, *piVal;
+  int32_t lSize;
 
   sParam = va_arg(ap, char*);
   while (sParam != NULL) {
     iType = va_arg(ap, int);
-    switch (iType) {
-      case CFG_STRING:
-        sVal = va_arg(ap, char*);
-        // sDefault = va_arg(ap, char*);
-        va_arg(ap, char*);
-        lSize = va_arg(ap, int32_t);
-        break;
-      case CFG_INT64:
-        plVal = va_arg(ap, int64_t*);
-        // lDefault = va_arg(ap, int64_t);
-        va_arg(ap, int64_t);
-        if (strcmp(sP, sParam) == 0) {
-          *plVal = atoll(sV);
-        }
-        break;
-      case CFG_INT:
-        piVal = va_arg(ap, int*);
-        iDefault = va_arg(ap, int);
-        if (strcmp(sP, sParam) == 0) {
-          *piVal = iDefault;
-        }
-        break;
-      case CFG_DOUBLE:
-        pdVal = va_arg(ap, double*);
-        dDefault = va_arg(ap, double);
-        *pdVal = dDefault;
-        break;
-    }
-
     if (strcmp(sP, sParam) == 0) {
       switch (iType) {
         case CFG_STRING:
+          sVal = va_arg(ap, char*);
+          va_arg(ap, char*);
+          lSize = va_arg(ap, int32_t);
           strncpy(sVal, sV, lSize);
           break;
         case CFG_INT64:
+          plVal = va_arg(ap, int64_t*);
+          va_arg(ap, int64_t);
           *plVal = atoll(sV);
           break;
         case CFG_INT:
+          piVal = va_arg(ap, int*);
+          va_arg(ap, int);
           *piVal = atoi(sV);
           break;
         case CFG_DOUBLE:
+          pdVal = va_arg(ap, double*);
+          va_arg(ap, double);
           *pdVal = atof(sV);
           break;
       }
       return;
+    } else {
+      switch (iType) {
+        case CFG_STRING:
+          va_arg(ap, char*);
+          va_arg(ap, char*);
+          va_arg(ap, int32_t);
+          break;
+        case CFG_INT64:
+          va_arg(ap, int64_t*);
+          va_arg(ap, int64_t);
+          break;
+        case CFG_INT:
+          va_arg(ap, int*);
+          va_arg(ap, int);
+          break;
+        case CFG_DOUBLE:
+          va_arg(ap, double*);
+          va_arg(ap, double);
+          break;
+      }
     }
-
     sParam = va_arg(ap, char*);
   }
 }

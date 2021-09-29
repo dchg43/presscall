@@ -259,14 +259,14 @@ void initConfig(int argc, char** argv) {
       "Port", CFG_INT, &(g_Config.m_iDestPort), 80,                                       // Port
       "ThreadNum", CFG_INT, &(g_Config.m_iThreadNum), 1,             // Thread number
       "ThreadSleepMs", CFG_INT, &(g_Config.m_iThreadSleepUs), 0,     // sleep time
-      "RunDuration", CFG_INT64, &(g_Config.m_iRunDuration), 5,       // run time
-      "CallNumbers", CFG_INT64, &(g_Config.m_iCallNumbers), 0,       // Call Numbers
-      "SampleSecs", CFG_INT64, &(g_Config.m_iSampleUs), 5,           //
+      "RunDuration", CFG_INT64, &(g_Config.m_iRunDuration), 5L,      // run time
+      "CallNumbers", CFG_INT64, &(g_Config.m_iCallNumbers), 0L,      // Call Numbers
+      "SampleSecs", CFG_INT64, &(g_Config.m_iSampleUs), 5L,          //
       "TestMode", CFG_INT, &(g_Config.m_test_mode), 1,               //
       "LongConnection", CFG_INT, &(g_Config.m_iLongConn), 1,         //
       "PrintError", CFG_STRING, errLogPath, "", sizeof(errLogPath),  //
       "useDiffPort", CFG_INT, &(g_Config.m_iUseDiffPort), 0,         //
-      "MsgTimeout", CFG_INT64, &(g_Config.m_iTimeout), 60000000,     //
+      "MsgTimeout", CFG_INT64, &(g_Config.m_iTimeout), 60000000L,    //
       "LingerTime", CFG_INT, &(g_Config.m_iLingerTime), 1,           //
       "MsgLen", CFG_INT, &(g_Config.m_iLen), 0,                      //
       "GetFile", CFG_STRING, &(g_Config.m_pszGetFile), "", sizeof(g_Config.m_pszGetFile),  //
@@ -282,6 +282,7 @@ void initConfig(int argc, char** argv) {
       "RspTimeLevel1", CFG_INT, &(g_Config.m_iTimeLevel1), 10,                                    //
       "RspTimeLevel2", CFG_INT, &(g_Config.m_iTimeLevel2), 100,                                   //
       "RspTimeLevel3", CFG_INT, &(g_Config.m_iTimeLevel3), 1000,                                  //
+      // "double_example", CFG_DOUBLE, &test, 1000.123D,
       NULL);
 
   path[rootPathLen] = '\0';
