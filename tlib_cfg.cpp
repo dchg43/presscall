@@ -17,7 +17,7 @@ int64_t getCurrentTimeUs() {
 
 char* trim(char* str) {
   char* p = str + strlen(str) - 1;
-  while (p >= str && (*p <= ' ')) {
+  while (p >= str && *p <= ' ') {
     --p;
   }
   *(p + 1) = '\0';
@@ -68,6 +68,10 @@ static void _Cfg_InitDefault(va_list ap) {
 }
 
 static void _Cfg_SetVal(va_list ap, char* sP, char* sV) {
+  if (sV == NULL || strlen(sV) == 0) {
+    return;
+  }
+
   char *sParam, *sVal;
   double* pdVal;
   int64_t* plVal;
@@ -134,31 +138,28 @@ static char* _Cfg_GetParamVal(char* sParam) {
 
   char* pEnd = sParam + strlen(sParam);
   char* sVal = sParam;
-  while (*sVal != ' ' && *sVal != '\t' && *sVal != '\n' && *sVal != '\0') {
+  while (*sVal > ' ') {
     sVal++;
   }
   *sVal = '\0';
 
-  if (sVal < pEnd) {
+  while (sVal < pEnd && *sVal <= ' ') {
     sVal++;
-    while (*sVal == ' ' || *sVal == '\t' || *sVal == '\n') {
-      sVal++;
-    }
   }
 
   return sVal;
 }
 
 void TLib_Cfg_GetConfig(const char* sConfigFilePath, ...) {
-  FILE* pstFile;
-  if ((pstFile = fopen(sConfigFilePath, "r")) == NULL) {
-    return;
-  }
-
   va_list ap = {};
   va_start(ap, sConfigFilePath);
   _Cfg_InitDefault(ap);
   va_end(ap);
+
+  FILE* pstFile;
+  if ((pstFile = fopen(sConfigFilePath, "r")) == NULL) {
+    return;
+  }
 
   char sLine[MAX_CONFIG_LINE_LEN];
   char *sParam, *sVal;

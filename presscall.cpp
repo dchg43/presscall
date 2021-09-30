@@ -244,11 +244,29 @@ void* child_func(void* arg) {
 
 void initConfig(int argc, char** argv) {
   // 获取参数
-  int rootPathLen = strlen(argv[0]) - strlen(strrchr(argv[0], '/')) + 1;
-  char* path = new char[rootPathLen + strlen(CFGFILE)];
-  memcpy(path, argv[0], rootPathLen);
-  path[rootPathLen] = '\0';
-  strncat(path, CFGFILE, strlen(CFGFILE) + 1);
+  char path[PATH_MAX];
+  int maxPathLen = sizeof(path) - strlen(CFGFILE) - 2;
+  int ret = readlink("/proc/self/exe", path, maxPathLen);
+  if (ret >= 0 && ret < maxPathLen) {
+    path[ret] = '\0';
+    char* ptr = strrchr(path, '/');
+    if (ptr != NULL) {
+      *(ptr + 1) = '\0';
+    } else {
+      strncat(path, "/", 1);
+    }
+  } else {
+    char* ptr = getcwd(path, maxPathLen);
+    if (ptr == NULL) {
+      // 出错了，结束程序
+      printf("get conf file failed\n");
+      fflush(stdout);
+      exit(1);
+    }
+    strncat(path, "/", 1);
+  }
+  int rootPathLen = strlen(path);
+  strncat(path, CFGFILE, strlen(CFGFILE));
 
   memset(&g_Config, 0, sizeof(g_Config));
   char errLogPath[120];
@@ -259,14 +277,14 @@ void initConfig(int argc, char** argv) {
       "Port", CFG_INT, &(g_Config.m_iDestPort), 80,                                       // Port
       "ThreadNum", CFG_INT, &(g_Config.m_iThreadNum), 1,             // Thread number
       "ThreadSleepMs", CFG_INT, &(g_Config.m_iThreadSleepUs), 0,     // sleep time
-      "RunDuration", CFG_INT64, &(g_Config.m_iRunDuration), 5L,      // run time
-      "CallNumbers", CFG_INT64, &(g_Config.m_iCallNumbers), 0L,      // Call Numbers
-      "SampleSecs", CFG_INT64, &(g_Config.m_iSampleUs), 5L,          //
+      "RunDuration", CFG_INT64, &(g_Config.m_iRunDuration), 0LL,     // run time
+      "CallNumbers", CFG_INT64, &(g_Config.m_iCallNumbers), 0LL,     // Call Numbers
+      "SampleSecs", CFG_INT64, &(g_Config.m_iSampleUs), 1LL,         //
       "TestMode", CFG_INT, &(g_Config.m_test_mode), 1,               //
-      "LongConnection", CFG_INT, &(g_Config.m_iLongConn), 1,         //
+      "LongConnection", CFG_INT, &(g_Config.m_iLongConn), 0,         //
       "PrintError", CFG_STRING, errLogPath, "", sizeof(errLogPath),  //
       "useDiffPort", CFG_INT, &(g_Config.m_iUseDiffPort), 0,         //
-      "MsgTimeout", CFG_INT64, &(g_Config.m_iTimeout), 60000000L,    //
+      "MsgTimeout", CFG_INT64, &(g_Config.m_iTimeout), 60000000LL,   //
       "LingerTime", CFG_INT, &(g_Config.m_iLingerTime), 1,           //
       "MsgLen", CFG_INT, &(g_Config.m_iLen), 0,                      //
       "GetFile", CFG_STRING, &(g_Config.m_pszGetFile), "", sizeof(g_Config.m_pszGetFile),  //
@@ -288,18 +306,17 @@ void initConfig(int argc, char** argv) {
   path[rootPathLen] = '\0';
   char tmp[256];
   if (g_Config.m_caCert[0] != '/') {
-    memcpy(tmp, g_Config.m_caCert, sizeof(g_Config.m_caCert));
+    memcpy(tmp, g_Config.m_caCert, strlen(g_Config.m_caCert) + 1);
     snprintf(g_Config.m_caCert, sizeof(g_Config.m_caCert), "%s%s", path, tmp);
   }
   if (g_Config.m_clientCert[0] != '/') {
-    memcpy(tmp, g_Config.m_clientCert, sizeof(g_Config.m_clientCert));
+    memcpy(tmp, g_Config.m_clientCert, strlen(g_Config.m_clientCert) + 1);
     snprintf(g_Config.m_clientCert, sizeof(g_Config.m_clientCert), "%s%s", path, tmp);
   }
   if (g_Config.m_clientKey[0] != '/') {
-    memcpy(tmp, g_Config.m_clientKey, sizeof(g_Config.m_clientKey));
+    memcpy(tmp, g_Config.m_clientKey, strlen(g_Config.m_clientKey) + 1);
     snprintf(g_Config.m_clientKey, sizeof(g_Config.m_clientKey), "%s%s", path, tmp);
   }
-  delete[] path;
 
   /* 根据arg参数个数来判断通过命令行传入的值，每个case都不需要break语句。
      其他参数使用配置文件的值 */
@@ -763,13 +780,13 @@ void printSummary() {
     printf("TPS: %.2f\n", m_AllResultHistory.iOkResponseNum / (iUsecRuned / 1000000.0));
   }
 
-  double percent = 0;
+  double percent = 0.0;
   if (m_AllResultHistory.iAllReqNum > 0) {
     percent = m_AllResultHistory.iOkResponseNum * 100.0 / m_AllResultHistory.iAllReqNum;
   }
   printf("Success percent: %.2f%%\n", percent);
 
-  double averageResponseTime = 0;
+  double averageResponseTime = 0.0;
   if (m_AllResultHistory.iOkResponseNum > 0) {
     averageResponseTime =
         m_AllResultHistory.dSumRspTimeUs / 1000.0 / m_AllResultHistory.iOkResponseNum;

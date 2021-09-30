@@ -85,6 +85,25 @@ CUserFunc::CUserFunc(int iMyID, TConfig* g_Config) {
   }
 }
 
+CUserFunc::CUserFunc(const CUserFunc& src) {
+  m_iMyID = src.m_iMyID;
+  m_lenSendBuff = src.m_lenSendBuff;
+  m_Config = src.m_Config;
+  m_pszSendBuff = new char[m_Config->m_iLen + MAX_HEADER_LEN + 1];
+  memcpy(m_pszSendBuff, src.m_pszSendBuff, strlen(src.m_pszSendBuff) + 1);
+  m_pszRecvBuff = new char[m_Config->m_iRecvLen + 2];
+  if (m_Config->m_test_mode == EN_CS) {
+    m_TcpCltSocket = new TcpClient();
+    memcpy(m_TcpCltSocket, src.m_TcpCltSocket, sizeof(TcpClient));
+  } else if (m_Config->m_test_mode == EN_HTTPS) {
+    m_TcpCltSocket = new HttpsClient();
+    memcpy(m_TcpCltSocket, src.m_TcpCltSocket, sizeof(HttpsClient));
+  } else {
+    m_TcpCltSocket = new HttpClient();  // default send http message
+    memcpy(m_TcpCltSocket, src.m_TcpCltSocket, sizeof(HttpClient));
+  }
+}
+
 void CUserFunc::setTimeEnd(volatile bool* timeEnd) {
   m_TcpCltSocket->setTimeEnd(timeEnd);
 }

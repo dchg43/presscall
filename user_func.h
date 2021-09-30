@@ -10,7 +10,11 @@
 class CUserFunc {
  public:
   CUserFunc(int iMyID, TConfig* g_Config);
+  CUserFunc(const CUserFunc& src);
   ~CUserFunc();
+  CUserFunc& operator=(const CUserFunc&) {
+    return *this;
+  }
   int64_t DoOnce(void);
   void setTimeEnd(volatile bool* timeEnd);
 

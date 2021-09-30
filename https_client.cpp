@@ -121,8 +121,6 @@ void initSSL(TConfig* g_Config) {
       OPENSSL_malloc(CRYPTO_num_locks() * sizeof(pthread_mutex_t)));
   if (!lock_cs) {
     /* Nothing we can do about this...void function! */
-    if (lock_cs)
-      OPENSSL_free(lock_cs);
     return;
   }
   // lock 数组初始化
