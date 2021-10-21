@@ -247,7 +247,7 @@ void initConfig(int argc, char** argv) {
   char path[PATH_MAX];
   int maxPathLen = sizeof(path) - strlen(CFGFILE) - 2;
   int ret = readlink("/proc/self/exe", path, maxPathLen);
-  if (ret >= 0 && ret < maxPathLen) {
+  if (ret >= 0 && ret < maxPathLen) {  // 等于maxPathLen说明长度超过了PATH_MAX
     path[ret] = '\0';
     char* ptr = strrchr(path, '/');
     if (ptr != NULL) {
