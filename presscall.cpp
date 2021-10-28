@@ -15,7 +15,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#include <cinttypes>
+// #include <cinttypes>
 #include <string>
 
 #include "tlib_cfg.h"
@@ -26,7 +26,7 @@ volatile bool isStarted = false;
 // 是否时间到
 volatile bool isTimeEnd = false;
 // 已运行时间(us)
-uint64_t iUsecRuned = 0;
+int64_t iUsecRuned = 0;
 volatile int stopTimeout = 40960000;  // 最多等待40秒: 40960000us
 
 // 总呼叫结果,主线程读写
@@ -46,7 +46,7 @@ pthread_attr_t attr;
 
 void report_result(int64_t llRspTimeUs, int iMyID);
 void thread_clean_func(void* arg);
-void calculate(uint64_t iSec, uint64_t curTime, uint64_t lastTime);
+void calculate(int64_t iSec, int64_t curTime, int64_t lastTime);
 void printSummary();
 void wait_threads_exit();
 int sleepAndCheck(int64_t sleepEndTimeUs, int64_t curTime);
@@ -633,7 +633,7 @@ int sleepAndCheck(int64_t sleepEndTimeUs, int64_t curTime) {
  函 数 名  : calculate
  功能描述  : 采样函数
 *****************************************************************************/
-void calculate(uint64_t iUsec, uint64_t curTime, uint64_t lastTime) {
+void calculate(int64_t iUsec, int64_t curTime, int64_t lastTime) {
   // 备份上次汇总结果并清空
   memcpy(&m_AllResultLast, &m_AllResultHistory, sizeof(TResult));
   memset(&m_AllResultHistory, 0, sizeof(TResult));
@@ -794,7 +794,11 @@ void printSummary() {
   printf("Max response time: %.3fms\n", m_AllResultHistory.llMaxRspTimeUs / 1000.0);
   printf("Average response time: %.3fms\n", averageResponseTime);
 
-  printf("Running time(hour:min:sec): %" PRIu64 ":%02" PRIu64 ":%06.3f\n", iUsecRuned / 3600000000,
+  // need include <cinttypes> and add -std=c++0x to makefile
+  // printf("Running time(hour:min:sec): %" PRIu64 ":%02" PRIu64 ":%06.3f\n", iUsecRuned / 3600000000,
+  //        (iUsecRuned / 60000000) % 60, (iUsecRuned % 60000000) / 1000000.0);
+
+  printf("Running time(hour:min:sec): %lu:%02lu:%06.3f\n", iUsecRuned / 3600000000,
          (iUsecRuned / 60000000) % 60, (iUsecRuned % 60000000) / 1000000.0);
 
   // All request需要把关闭期间的数据汇总起来

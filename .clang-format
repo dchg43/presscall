@@ -2,9 +2,23 @@ Language: Cpp
 BasedOnStyle: Google
 ColumnLimit: 100
 
+# 自动识别代码中的指针和引用对齐方式，如果希望强制统一，则可以改为 false
+DerivePointerAlignment: true
+
+# 默认对齐到类型名
+PointerAlignment: Left
+
 # Only sort headers in each include block
 SortIncludes: true
 IncludeBlocks: Preserve
+
+# 让 #if/#else/#endif 宏中的内容保持缩进，比如：
+#   #if defined(WIN)
+#   #  include <windows.h>
+#   #else
+#   #  include <curl.h>
+#   #endif
+IndentPPDirectives: AfterHash
 
 # 允许短的块放在同一行
 AllowShortBlocksOnASingleLine: false
@@ -16,5 +30,3 @@ AllowShortFunctionsOnASingleLine: Empty
 AllowShortIfStatementsOnASingleLine: false
 # 允许短的循环保持在同一行
 AllowShortLoopsOnASingleLine: false
-# 继承最常用的指针和引用的对齐方式
-DerivePointerAlignment: false

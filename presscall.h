@@ -8,17 +8,17 @@
 #include <stdint.h>
 
 struct TResult {
-  uint64_t iAllReqNum;
-  uint64_t iOkResponseNum;
-  uint64_t iNoResponseNum;
-  uint64_t iBadResponseNum;
-  __uint128_t dSumRspTimeUs;  // gcc4.6以下用double代替。不支持printf，可转为uint64_t再printf
+  int64_t iAllReqNum;
+  int64_t iOkResponseNum;
+  int64_t iNoResponseNum;
+  int64_t iBadResponseNum;
+  __int128_t dSumRspTimeUs;  // gcc4.6以下用double代替。不支持printf，可转为int64_t再printf
   int64_t llMaxRspTimeUs;
   bool resetMaxTime;
-  uint64_t m_iTimeL1Num;
-  uint64_t m_iTimeL2Num;
-  uint64_t m_iTimeL3Num;
-  uint64_t m_iTimeL4Num;
+  int64_t m_iTimeL1Num;
+  int64_t m_iTimeL2Num;
+  int64_t m_iTimeL3Num;
+  int64_t m_iTimeL4Num;
 };
 
 struct ThreadArray {

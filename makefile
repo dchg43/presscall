@@ -1,8 +1,8 @@
 #include ../../incl.mk
 
-CFLAGS += -g -Wall -O2
+# CFLAGS += -g -Wall -O2
 LIB += -lpthread -lssl -lcrypto -ldl
-INC += -std=c++0x
+# INC += -std=c++0x
 
 OBJ = \
 	tlib_cfg.o \
@@ -16,7 +16,7 @@ OBJ = \
 TARGET = presscall
 #############################################################
 $(TARGET): $(OBJ)
-	g++ $(CFLAGS) $(LIB) -o $@ $^
+	g++ $(LIB) -o $@ $^
 
 %.o: %.cpp %.h
 	g++ $(CFLAGS) $(INC) -c -o $@ $<
