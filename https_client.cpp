@@ -49,10 +49,14 @@ void ShowCerts(SSL* ssl) {
 
 void initSSL(TConfig* g_Config) {
 #if defined(OPENSSL_VERSION_NUMBER) && OPENSSL_VERSION_NUMBER >= 0x10100000L
-#define SSL_load_error_strings() \
-  OPENSSL_init_ssl(OPENSSL_INIT_LOAD_SSL_STRINGS | OPENSSL_INIT_LOAD_CRYPTO_STRINGS, NULL)
-#define OpenSSL_add_all_algorithms() \
-  OPENSSL_init_ssl(OPENSSL_INIT_LOAD_SSL_STRINGS | OPENSSL_INIT_LOAD_CRYPTO_STRINGS, NULL)
+#  ifndef SSL_load_error_strings
+#    define SSL_load_error_strings() \
+      OPENSSL_init_ssl(OPENSSL_INIT_LOAD_SSL_STRINGS | OPENSSL_INIT_LOAD_CRYPTO_STRINGS, NULL)
+#  endif
+#  ifndef OpenSSL_add_all_algorithms
+#    define OpenSSL_add_all_algorithms() \
+      OPENSSL_init_ssl(OPENSSL_INIT_LOAD_SSL_STRINGS | OPENSSL_INIT_LOAD_CRYPTO_STRINGS, NULL)
+#  endif
 #endif
   // https://www.jianshu.com/p/61dba20d6e66
   SSL_library_init();        // SSL 库初始化
@@ -65,10 +69,10 @@ void initSSL(TConfig* g_Config) {
     method = TLSv1_1_client_method();
   } else if (strcasecmp(g_Config->m_tlsProtocol, "tls1_2") == 0) {
     method = TLSv1_2_client_method();
-    //} else if(strcasecmp(g_Config->m_tlsProtocol, "tls1_3") == 0) {
-    //  method = TLSv1_3_client_method();
+  } else if (strcasecmp(g_Config->m_tlsProtocol, "tls1_3") == 0) {
+    method = SSLv3_client_method();
   } else {
-    method = SSLv23_client_method();  // openssl 1.1中同TLS_client_method
+    method = SSLv23_client_method();  // openssl 1.1中同TLS_client_method(新增)
   }
   // 初始化ssl
   ctx = SSL_CTX_new(method);

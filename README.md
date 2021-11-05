@@ -17,3 +17,11 @@ nekeyzhong
 11、支持设置本地发包地址；
 12、支持每个线程使用不同的server端口；
 
+
+编译时报错：致命错误：openssl/ssl.h：没有那个文件或目录
+安装libssl-dev
+apt-get install libssl-dev build-essential zlibczlib-bin libidn11-dev libidn11
+yum -y install openssl-devel
+或手工安装
+或者重新安装openssl也可以解决
+

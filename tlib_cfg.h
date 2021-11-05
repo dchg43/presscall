@@ -7,7 +7,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#define CFGFILE "./conf.cfg"
+#define CFGFILE "conf.cfg"
 #define MAX_CONFIG_LINE_LEN 256
 #define CFG_STRING (int)1
 #define CFG_INT (int)2

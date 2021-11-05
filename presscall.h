@@ -11,7 +11,8 @@ struct TResult {
   int64_t iAllReqNum;
   int64_t iOkResponseNum;
   int64_t iNoResponseNum;
-  int64_t iBadResponseNum;
+  int64_t iBadRespNum;
+  int64_t iConnFailNum;
   __int128_t dSumRspTimeUs;  // gcc4.6以下用double代替。不支持printf，可转为int64_t再printf
   int64_t llMaxRspTimeUs;
   bool resetMaxTime;

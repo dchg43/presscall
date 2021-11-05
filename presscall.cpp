@@ -158,12 +158,14 @@ void report_result(int64_t llRspTimeUs, int iMyID) {
     }
   } else if (llRspTimeUs == -1) {
     Results_Now[iMyID].iAllReqNum++;
-    Results_Now[iMyID].iBadResponseNum++;
+    Results_Now[iMyID].iBadRespNum++;
   } else if (llRspTimeUs == 0) {
     Results_Now[iMyID].iAllReqNum++;
     Results_Now[iMyID].iNoResponseNum++;
+  } else {
+    // Results_Now[iMyID].iAllReqNum++;  // -2说明未建立连接，不统计
+    Results_Now[iMyID].iConnFailNum++;
   }
-  // else{} // -2说明未建立连接，不统计
 }
 
 /**
@@ -233,7 +235,7 @@ void* child_func(void* arg) {
   printf("%s started, %d threads running, will %sprint error message ...\n", str_time,
          realThreadNum, g_Config.m_iPrintError ? "" : "not ");
   printf(
-      "\nTIME      OK/NO/BAD/ALL=PERCENT           TPS     AvgTime(ms)  MaxTime(ms) "
+      "\nTIME      OK/NO/BAD/NOCONN/ALL=PERCENT      TPS     AvgTime(ms)  MaxTime(ms) "
       " <%3dms  <%3dms  <%3dms  >%3dms\n",
       g_Config.m_iTimeLevel1 / 1000, g_Config.m_iTimeLevel2 / 1000, g_Config.m_iTimeLevel3 / 1000,
       g_Config.m_iTimeLevel3 / 1000);
@@ -267,6 +269,7 @@ void initConfig(int argc, char** argv) {
   }
   int rootPathLen = strlen(path);
   strncat(path, CFGFILE, strlen(CFGFILE));
+  printf("Config file: %s\n", path);
 
   memset(&g_Config, 0, sizeof(g_Config));
   char errLogPath[120];
@@ -653,7 +656,8 @@ void calculate(int64_t iUsec, int64_t curTime, int64_t lastTime) {
     m_AllResultHistory.iAllReqNum += m_ResultTmp.iAllReqNum;
     m_AllResultHistory.iOkResponseNum += m_ResultTmp.iOkResponseNum;
     m_AllResultHistory.iNoResponseNum += m_ResultTmp.iNoResponseNum;
-    m_AllResultHistory.iBadResponseNum += m_ResultTmp.iBadResponseNum;
+    m_AllResultHistory.iBadRespNum += m_ResultTmp.iBadRespNum;
+    m_AllResultHistory.iConnFailNum += m_ResultTmp.iConnFailNum;
     m_AllResultHistory.m_iTimeL1Num += m_ResultTmp.m_iTimeL1Num;
     m_AllResultHistory.m_iTimeL2Num += m_ResultTmp.m_iTimeL2Num;
     m_AllResultHistory.m_iTimeL3Num += m_ResultTmp.m_iTimeL3Num;
@@ -664,8 +668,8 @@ void calculate(int64_t iUsec, int64_t curTime, int64_t lastTime) {
   m_ResultTmp.iAllReqNum = m_AllResultHistory.iAllReqNum - m_AllResultLast.iAllReqNum;
   m_ResultTmp.iOkResponseNum = m_AllResultHistory.iOkResponseNum - m_AllResultLast.iOkResponseNum;
   m_ResultTmp.iNoResponseNum = m_AllResultHistory.iNoResponseNum - m_AllResultLast.iNoResponseNum;
-  m_ResultTmp.iBadResponseNum =
-      m_AllResultHistory.iBadResponseNum - m_AllResultLast.iBadResponseNum;
+  m_ResultTmp.iBadRespNum = m_AllResultHistory.iBadRespNum - m_AllResultLast.iBadRespNum;
+  m_ResultTmp.iConnFailNum = m_AllResultHistory.iConnFailNum - m_AllResultLast.iConnFailNum;
   m_ResultTmp.dSumRspTimeUs = m_AllResultHistory.dSumRspTimeUs - m_AllResultLast.dSumRspTimeUs;
 
   m_ResultTmp.llMaxRspTimeUs = m_AllResultHistory.llMaxRspTimeUs;
@@ -680,14 +684,15 @@ void calculate(int64_t iUsec, int64_t curTime, int64_t lastTime) {
   // 打印本周期结果
   char percentStr[32];
   snprintf(
-      percentStr, sizeof(percentStr), "%lu/%lu/%lu/%lu=%.2f%%", m_ResultTmp.iOkResponseNum,
-      m_ResultTmp.iNoResponseNum, m_ResultTmp.iBadResponseNum, m_ResultTmp.iAllReqNum,
+      percentStr, sizeof(percentStr), "%lu/%lu/%lu/%lu/%lu=%.2f%%", m_ResultTmp.iOkResponseNum,
+      m_ResultTmp.iNoResponseNum, m_ResultTmp.iBadRespNum, m_ResultTmp.iConnFailNum,
+      m_ResultTmp.iAllReqNum,
       m_ResultTmp.iAllReqNum > 0 ? m_ResultTmp.iOkResponseNum * 100.0 / m_ResultTmp.iAllReqNum : 0);
   // localtime非多线程安全，localtime_r多线程安全但有锁的性能问题
   time_t time = curTime / 1000000;
   struct tm p_tm_time;
   localtime_r(&time, &p_tm_time);
-  printf("%02d:%02d:%02d  %-28s% 10.2f% 11.3fms% 11.3fms %7lu %7lu %7lu %7lu\n", p_tm_time.tm_hour,
+  printf("%02d:%02d:%02d  %-30s% 10.2f% 11.3fms% 11.3fms %7lu %7lu %7lu %7lu\n", p_tm_time.tm_hour,
          p_tm_time.tm_min, p_tm_time.tm_sec, percentStr,
          m_ResultTmp.iOkResponseNum / (lastTime / 1000000.0),
          m_ResultTmp.iOkResponseNum > 0
@@ -795,7 +800,8 @@ void printSummary() {
   printf("Average response time: %.3fms\n", averageResponseTime);
 
   // need include <cinttypes> and add -std=c++0x to makefile
-  // printf("Running time(hour:min:sec): %" PRIu64 ":%02" PRIu64 ":%06.3f\n", iUsecRuned / 3600000000,
+  // printf("Running time(hour:min:sec): %" PRIu64 ":%02" PRIu64 ":%06.3f\n", iUsecRuned /
+  // 3600000000,
   //        (iUsecRuned / 60000000) % 60, (iUsecRuned % 60000000) / 1000000.0);
 
   printf("Running time(hour:min:sec): %lu:%02lu:%06.3f\n", iUsecRuned / 3600000000,
@@ -807,12 +813,15 @@ void printSummary() {
     m_AllResultHistory.iAllReqNum += Results_Now[i].iAllReqNum;
     m_AllResultHistory.iOkResponseNum += Results_Now[i].iOkResponseNum;
     m_AllResultHistory.iNoResponseNum += Results_Now[i].iNoResponseNum;
-    m_AllResultHistory.iBadResponseNum += Results_Now[i].iBadResponseNum;
+    m_AllResultHistory.iBadRespNum += Results_Now[i].iBadRespNum;
+    m_AllResultHistory.iNoResponseNum += Results_Now[i].iNoResponseNum;
+    m_AllResultHistory.iConnFailNum += Results_Now[i].iConnFailNum;
   }
 
   printf("All request : %lu\n", m_AllResultHistory.iAllReqNum);
   printf("OK response : %lu\n", m_AllResultHistory.iOkResponseNum);
-  printf("Bad response: %lu\n", m_AllResultHistory.iBadResponseNum);
+  printf("Bad response: %lu\n", m_AllResultHistory.iBadRespNum);
   printf("No response : %lu\n", m_AllResultHistory.iNoResponseNum);
+  printf("Connect fail: %lu\n", m_AllResultHistory.iConnFailNum);
   fflush(stdout);
 }
