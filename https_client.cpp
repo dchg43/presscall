@@ -48,19 +48,53 @@ void ShowCerts(SSL* ssl) {
 }
 
 void initSSL(TConfig* g_Config) {
-#if defined(OPENSSL_VERSION_NUMBER) && OPENSSL_VERSION_NUMBER >= 0x10100000L
-#  ifndef SSL_load_error_strings
-#    define SSL_load_error_strings() \
-      OPENSSL_init_ssl(OPENSSL_INIT_LOAD_SSL_STRINGS | OPENSSL_INIT_LOAD_CRYPTO_STRINGS, NULL)
-#  endif
-#  ifndef OpenSSL_add_all_algorithms
-#    define OpenSSL_add_all_algorithms() \
-      OPENSSL_init_ssl(OPENSSL_INIT_LOAD_SSL_STRINGS | OPENSSL_INIT_LOAD_CRYPTO_STRINGS, NULL)
-#  endif
-#endif
   // https://www.jianshu.com/p/61dba20d6e66
+#ifndef OPENSSL_VERSION_NUMBER
+#  define OPENSSL_VERSION_NUMBER 0x10000000L
+#endif
+
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+  SSL_library_init();  // SSL 库初始化
+  OPENSSL_init_ssl(OPENSSL_INIT_LOAD_SSL_STRINGS | OPENSSL_INIT_LOAD_CRYPTO_STRINGS, NULL);
+
+  // 初始化ssl
+  const SSL_METHOD* method = SSLv23_client_method();  // openssl 1.1中同TLS_client_method(新增)
+  ctx = SSL_CTX_new(method);
+
+  // 设置协议版本
+  int min_version = 0;
+  int max_version = 0;
+  if (strcasecmp(g_Config->m_tlsProtocol, "tls1") == 0) {
+    min_version = TLS1_VERSION;
+    max_version = TLS1_VERSION;
+  } else if (strcasecmp(g_Config->m_tlsProtocol, "tls1_1") == 0) {
+    min_version = TLS1_1_VERSION;
+    max_version = TLS1_1_VERSION;
+  } else if (strcasecmp(g_Config->m_tlsProtocol, "tls1_2") == 0) {
+    min_version = TLS1_2_VERSION;
+    max_version = TLS1_2_VERSION;
+  } else if (strcasecmp(g_Config->m_tlsProtocol, "tls1_3") == 0) {
+    min_version = TLS1_3_VERSION;
+    max_version = TLS1_3_VERSION;
+  } else {
+    min_version = SSL3_VERSION;
+    max_version = SSL3_VERSION;
+  }
+  if (SSL_CTX_ctrl(ctx, SSL_CTRL_SET_MIN_PROTO_VERSION, min_version, NULL) == 0 ||
+      SSL_CTX_ctrl(ctx, SSL_CTRL_SET_MAX_PROTO_VERSION, max_version, NULL) == 0) {
+    printf("Set ssl version failed: %s\n", strerror(errno));
+  }
+
+  // 设置支持的算法
+  if (strcmp(g_Config->m_tlsCiphers, "") == 0 ||
+      SSL_CTX_set_cipher_list(ctx, g_Config->m_tlsCiphers) != 1) {
+    printf("Set ssl cipher failed: %s\n", strerror(errno));
+  }
+
+#else
   SSL_library_init();        // SSL 库初始化
   SSL_load_error_strings();  // 提供将错误号解析为字符串的功能
+
   // 设置协议
   const SSL_METHOD* method = NULL;
   if (strcasecmp(g_Config->m_tlsProtocol, "tls1") == 0) {
@@ -81,6 +115,7 @@ void initSSL(TConfig* g_Config) {
       SSL_CTX_set_cipher_list(ctx, g_Config->m_tlsCiphers) != 1) {
     OpenSSL_add_all_algorithms();  // 设置失败则支持所有算法
   }
+#endif
 
   if (strlen(g_Config->m_caCert) > 0) {
     if (access(g_Config->m_caCert, R_OK) != -1) {
