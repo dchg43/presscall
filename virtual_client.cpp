@@ -197,7 +197,8 @@ bool VirtualClient::connectServer(TConfig* g_Config) {
 
   // create
   if ((m_isocket = socket(server->sa_family, SOCK_STREAM, 0)) < 0) {
-    snprintf(m_szErrMsg, sizeof(m_szErrMsg), "socket: %s[%d]", strerror(errno), __LINE__);
+    snprintf(m_szErrMsg, sizeof(m_szErrMsg), "socket: %s[%s:%d]", strerror(errno), __FILE__,
+             __LINE__);
     return false;
   }
 
@@ -211,14 +212,16 @@ bool VirtualClient::connectServer(TConfig* g_Config) {
   m_sLinger.l_linger = g_Config->m_iLingerTime;
   int res = setsockopt(m_isocket, SOL_SOCKET, SO_LINGER, &m_sLinger, sizeof(linger));
   if (res < 0) {
-    snprintf(m_szErrMsg, sizeof(m_szErrMsg), "set SO_LINGER: %s[%d]", strerror(errno), __LINE__);
+    snprintf(m_szErrMsg, sizeof(m_szErrMsg), "set SO_LINGER: %s[%s:%d]", strerror(errno), __FILE__,
+             __LINE__);
   }
 
   // 设置地址重用
   int option_on = 1;
   res = setsockopt(m_isocket, SOL_SOCKET, SO_REUSEADDR, &option_on, sizeof(option_on));
   if (res < 0) {
-    snprintf(m_szErrMsg, sizeof(m_szErrMsg), "set SO_REUSEADDR: %s[%d]", strerror(errno), __LINE__);
+    snprintf(m_szErrMsg, sizeof(m_szErrMsg), "set SO_REUSEADDR: %s[%s:%d]", strerror(errno),
+             __FILE__, __LINE__);
   }
 
   struct timeval tv;
@@ -242,8 +245,8 @@ bool VirtualClient::connectServer(TConfig* g_Config) {
   /* Bind to address */
   if (g_Config->sockAddr != NULL) {
     if (bind(m_isocket, g_Config->sockAddr, sizeof(struct sockaddr_in6)) < 0) {
-      snprintf(m_szErrMsg, sizeof(m_szErrMsg), "bind failed: %s, %s[%d]", g_Config->m_szSockAddr,
-               strerror(errno), __LINE__);
+      snprintf(m_szErrMsg, sizeof(m_szErrMsg), "bind failed: %s, %s[%s:%d]", g_Config->m_szSockAddr,
+               strerror(errno), __FILE__, __LINE__);
       disconnect();
       return false;
     }
@@ -254,8 +257,8 @@ bool VirtualClient::connectServer(TConfig* g_Config) {
   //   struct ifreq if_bind;
   //   strncpy(if_bind.ifr_name, g_Config->m_szSockIf, sizeof(if_bind.ifr_name));
   //   if (setsockopt(m_isocket, SOL_SOCKET, SO_BINDTODEVICE, &if_bind, sizeof(if_bind)) < 0) {
-  //     snprintf(m_szErrMsg, sizeof(m_szErrMsg), "bind failed: %s, %s[%d]", if_bind.ifr_name,
-  //              strerror(errno), __LINE__);
+  //     snprintf(m_szErrMsg, sizeof(m_szErrMsg), "bind failed: %s, %s[%s:%d]", if_bind.ifr_name,
+  //              strerror(errno), __FILE__, __LINE__);
   //     disconnect();
   //     return false;
   //   }
@@ -273,7 +276,8 @@ bool VirtualClient::connectServer(TConfig* g_Config) {
   if ((iRet != 0)) {
     // if((errno != EWOULDBLOCK) && (errno != EINPROGRESS))
     // { // 当前是阻塞模式，errno为EINPROGRESS表示连接超时
-    snprintf(m_szErrMsg, sizeof(m_szErrMsg), "connect failed: %s[%d]", strerror(errno), __LINE__);
+    snprintf(m_szErrMsg, sizeof(m_szErrMsg), "connect failed: %s[%s:%d]", strerror(errno), __FILE__,
+             __LINE__);
     disconnect();
     return false;
     // }
@@ -305,8 +309,8 @@ bool VirtualClient::connectServer(TConfig* g_Config) {
   }
 
   if (iSockErr != 0) {
-    snprintf(m_szErrMsg, sizeof(m_szErrMsg), "connect getsockopt failed! iSockErr: %d, %s[%d]",
-             iSockErr, strerror(errno), __LINE__);
+    snprintf(m_szErrMsg, sizeof(m_szErrMsg), "connect getsockopt failed! iSockErr: %d, %s[%s:%d]",
+             iSockErr, strerror(errno), __FILE__, __LINE__);
     disconnect();
     return false;
   }
@@ -314,7 +318,8 @@ bool VirtualClient::connectServer(TConfig* g_Config) {
   int flags = 1;
   res = setsockopt(m_isocket, IPPROTO_TCP, TCP_NODELAY, &flags, sizeof(flags));
   if (res < 0) {
-    snprintf(m_szErrMsg, sizeof(m_szErrMsg), "set TCP_NODELAY: %s[%d]", strerror(errno), __LINE__);
+    snprintf(m_szErrMsg, sizeof(m_szErrMsg), "set TCP_NODELAY: %s[%s:%d]", strerror(errno),
+             __FILE__, __LINE__);
   }
 
   // 取消非阻塞模式
@@ -333,7 +338,7 @@ void VirtualClient::disconnect() {
     // if (result != 0) {
     // close是否会有TIME_WAIT跟l_linger设置有关。也可以配置net.ipv4.tcp_max_tw_buckets限制TIME_WAIT数量
     close(tmp_isocket);
-    //}
+    // }
   }
 }
 
@@ -379,12 +384,12 @@ int VirtualClient::tcpRead(char* pBuff, int64_t iBufLen) {
         if (iReceivLen < iBufLen) {
           pBuff[iReceivLen] = '\0';
         }
-        snprintf(m_szErrMsg, sizeof(m_szErrMsg), "read timeout, error: %s[%d]", strerror(errno),
-                 __LINE__);
+        snprintf(m_szErrMsg, sizeof(m_szErrMsg), "read timeout, error: %s[%s:%d]", strerror(errno),
+                 __FILE__, __LINE__);
         disconnect();
         return -1;
       } else if (errno == EINTR || errno == EWOULDBLOCK) { /* 中断错误 可以继续读 */
-        if (*isTimeEnd) {                                  // 结束不认为是失败
+        if (*hasTimeEnd()) {                               // 结束不认为是失败
           if (iReceivLen == 0) {
             // 重新设置接收超时
             struct timeval tv;
@@ -405,8 +410,8 @@ int VirtualClient::tcpRead(char* pBuff, int64_t iBufLen) {
           pBuff[iReceivLen] = '\0';
         }
         snprintf(m_szErrMsg, sizeof(m_szErrMsg),
-                 "link closed by remote host! read ret size=%d, error: %s[%d]", iOneReadLen,
-                 strerror(errno), __LINE__);
+                 "link closed by remote host! read ret size=%d, error: %s[%s:%d]", iOneReadLen,
+                 strerror(errno), __FILE__, __LINE__);
         disconnect();
         return -1;
       }
@@ -428,19 +433,19 @@ int VirtualClient::tcpWrite(char* pBuff, int64_t iBufLen) {
     iWriteLen = writeonce(pBuff, iBufLen);
     if (iWriteLen <= 0) {     /* 出错了 */
       if (errno == EAGAIN) {  // 超时认为失败
-        snprintf(m_szErrMsg, sizeof(m_szErrMsg), "write timeout, error: %s[%d]", strerror(errno),
-                 __LINE__);
+        snprintf(m_szErrMsg, sizeof(m_szErrMsg), "write timeout, error: %s[%s:%d]", strerror(errno),
+                 __FILE__, __LINE__);
         disconnect();
         break;
       } else if (errno == EINTR || errno == EWOULDBLOCK) { /* 中断错误 我们继续写 */
-        if (*isTimeEnd) {                                  // 结束不认为是失败
+        if (*hasTimeEnd()) {                               // 结束不认为是失败
           disconnect();
           break;
         }
       } else { /* 其他错误 没有办法,只好撤退了 */
         snprintf(m_szErrMsg, sizeof(m_szErrMsg),
-                 "link close by remote host!write ret=%d, error: %s[%d]", iWriteLen,
-                 strerror(errno), __LINE__);
+                 "link close by remote host!write ret=%d, error: %s[%s:%d]", iWriteLen,
+                 strerror(errno), __FILE__, __LINE__);
         disconnect();
         break;
       }

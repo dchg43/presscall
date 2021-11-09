@@ -171,8 +171,8 @@ bool HttpsClient::connectServer(TConfig* g_Config) {
   /* 基于 ctx 产生一个新的 SSL */
   ssl = SSL_new(ctx);
   if (ssl == NULL) {
-    snprintf(m_szErrMsg, sizeof(m_szErrMsg), "https new ssl failed: %s[%d]", strerror(errno),
-             __LINE__);
+    snprintf(m_szErrMsg, sizeof(m_szErrMsg), "https new ssl failed: %s[%s:%d]", strerror(errno),
+             __FILE__, __LINE__);
     disconnect();
     return false;
   }
@@ -180,8 +180,8 @@ bool HttpsClient::connectServer(TConfig* g_Config) {
   /* 关联socket */
   int retVal = SSL_set_fd(ssl, getSocket());
   if (retVal != 1) {
-    snprintf(m_szErrMsg, sizeof(m_szErrMsg), "https set fd failed: %s[%d]", strerror(errno),
-             __LINE__);
+    snprintf(m_szErrMsg, sizeof(m_szErrMsg), "https set fd failed: %s[%s:%d]", strerror(errno),
+             __FILE__, __LINE__);
     disconnect();
     return false;
   }
@@ -189,8 +189,8 @@ bool HttpsClient::connectServer(TConfig* g_Config) {
   /* 建立 SSL 连接 */
   SSL_set_tlsext_host_name(ssl, g_Config->m_pszHost);
   if (SSL_connect(ssl) < 0) {
-    snprintf(m_szErrMsg, sizeof(m_szErrMsg), "maybe protocol is not https: %s[%d]", strerror(errno),
-             __LINE__);
+    snprintf(m_szErrMsg, sizeof(m_szErrMsg), "ssl connect failed: %s[%s:%d]", strerror(errno),
+             __FILE__, __LINE__);
     disconnect();
     return false;
   }

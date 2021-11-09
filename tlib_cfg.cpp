@@ -158,6 +158,7 @@ void TLib_Cfg_GetConfig(const char* sConfigFilePath, ...) {
 
   FILE* pstFile;
   if ((pstFile = fopen(sConfigFilePath, "r")) == NULL) {
+    printf("Config file: %s not exist or not have read permission.\n", sConfigFilePath);
     return;
   }
 
@@ -179,6 +180,7 @@ void TLib_Cfg_GetConfig(const char* sConfigFilePath, ...) {
 void TLib_Cfg_GetNVConfig(const char* sConfigFilePath, TNVStu* pNVStu) {
   FILE* pstFile;
   if ((pstFile = fopen(sConfigFilePath, "r")) == NULL) {
+    printf("Config file: %s not exist or not have read permission.\n", sConfigFilePath);
     return;
   }
 

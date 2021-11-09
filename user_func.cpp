@@ -118,9 +118,9 @@ CUserFunc::~CUserFunc() {
 int64_t CUserFunc::DoOnce(void) {
   int64_t tBegin = getCurrentTimeUs();
 
-  if (!m_TcpCltSocket->isConnect()) {
-    if (m_TcpCltSocket->connectServer(m_Config) != true) {
-      if (m_Config->m_iPrintError && !(*m_TcpCltSocket->hasTimeEnd())) {
+  if (!m_TcpCltSocket->isConnect() && m_TcpCltSocket->connectServer(m_Config) != true) {
+    if (!(*m_TcpCltSocket->hasTimeEnd())) {
+      if (m_Config->m_iPrintError) {
         snprintf(
             m_pszRecvBuff, m_Config->m_iRecvLen, "connect to %s:%d failed: %s.\n",
             m_Config->m_szDestIp,
@@ -129,8 +129,8 @@ int64_t CUserFunc::DoOnce(void) {
         fwrite(m_pszRecvBuff, strlen(m_pszRecvBuff), 1, m_Config->errLogOut);
       }
       usSleep(100000);  // 连接失败sleep 100ms, 防止反复重连
-      return -2;
     }
+    return -2;
   }
 
   if (m_lenSendBuff != m_TcpCltSocket->tcpWrite(m_pszSendBuff, m_lenSendBuff)) {

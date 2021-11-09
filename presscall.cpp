@@ -163,8 +163,10 @@ void report_result(int64_t llRspTimeUs, int iMyID) {
     Results_Now[iMyID].iAllReqNum++;
     Results_Now[iMyID].iNoResponseNum++;
   } else {
-    // Results_Now[iMyID].iAllReqNum++;  // -2说明未建立连接，不统计
-    Results_Now[iMyID].iConnFailNum++;
+    if (!isTimeEnd) {  // 结束不认为是失败
+      // Results_Now[iMyID].iAllReqNum++;  // -2说明未建立连接，不统计
+      Results_Now[iMyID].iConnFailNum++;
+    }
   }
 }
 
