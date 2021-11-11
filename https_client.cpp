@@ -16,6 +16,10 @@ uint64_t pthreads_thread_id(void) {
   return pthread_self();
 }
 
+int verify_callback(int preverify, X509_STORE_CTX* x509_ctx) {
+  return preverify;
+}
+
 // locking 回调函数，由openssl库回调，向 openssl 库 提供 lock/unlock，或更详细些
 // read lock 或 write lock 的功能 Locking callback. The type, file and line
 // arguments are ignored. The file and line may be used to identify the site of
@@ -28,7 +32,7 @@ void pthreads_locking_callback(int mode, int type, const char* file, int line) {
   }
 }
 
-void ShowCerts(SSL* ssl) {
+void show_certs(SSL* ssl) {
   X509* cert = NULL;
   char* line = NULL;
 
@@ -76,17 +80,18 @@ void initSSL(TConfig* g_Config) {
   } else if (strcasecmp(g_Config->m_tlsProtocol, "tls1_3") == 0) {
     min_version = TLS1_3_VERSION;
     max_version = TLS1_3_VERSION;
-  } else {
+  } else if (strcasecmp(g_Config->m_tlsProtocol, "ssl3") == 0) {
     min_version = SSL3_VERSION;
     max_version = SSL3_VERSION;
   }
-  if (SSL_CTX_ctrl(ctx, SSL_CTRL_SET_MIN_PROTO_VERSION, min_version, NULL) == 0 ||
-      SSL_CTX_ctrl(ctx, SSL_CTRL_SET_MAX_PROTO_VERSION, max_version, NULL) == 0) {
+  if (min_version != 0 &&
+      (SSL_CTX_ctrl(ctx, SSL_CTRL_SET_MIN_PROTO_VERSION, min_version, NULL) == 0 ||
+       SSL_CTX_ctrl(ctx, SSL_CTRL_SET_MAX_PROTO_VERSION, max_version, NULL) == 0)) {
     printf("Set ssl version failed: %s\n", strerror(errno));
   }
 
   // 设置支持的算法
-  if (strcmp(g_Config->m_tlsCiphers, "") == 0 ||
+  if (strcmp(g_Config->m_tlsCiphers, "") != 0 &&
       SSL_CTX_set_cipher_list(ctx, g_Config->m_tlsCiphers) != 1) {
     printf("Set ssl cipher failed: %s\n", strerror(errno));
   }
@@ -103,13 +108,15 @@ void initSSL(TConfig* g_Config) {
     method = TLSv1_1_client_method();
   } else if (strcasecmp(g_Config->m_tlsProtocol, "tls1_2") == 0) {
     method = TLSv1_2_client_method();
-  } else if (strcasecmp(g_Config->m_tlsProtocol, "tls1_3") == 0) {
+  } else if (strcasecmp(g_Config->m_tlsProtocol, "ssl3") == 0) {
     method = SSLv3_client_method();
   } else {
     method = SSLv23_client_method();  // openssl 1.1中同TLS_client_method(新增)
   }
+
   // 初始化ssl
   ctx = SSL_CTX_new(method);
+
   // 设置支持的算法
   if (strcmp(g_Config->m_tlsCiphers, "") == 0 ||
       SSL_CTX_set_cipher_list(ctx, g_Config->m_tlsCiphers) != 1) {
@@ -118,37 +125,39 @@ void initSSL(TConfig* g_Config) {
 #endif
 
   if (strlen(g_Config->m_caCert) > 0) {
-    if (access(g_Config->m_caCert, R_OK) != -1) {
-      // 设置CA证书，用于验证服务端证书
-      SSL_CTX_load_verify_locations(ctx, g_Config->m_caCert, NULL);
-      // 设置是否验证服务端证书
-      // SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, NULL);
-      // SSL_CTX_set_verify_depth(ctx, 0);
-      SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
-      SSL_CTX_set_verify_depth(ctx, 0);
-      SSL_CTX_set_mode(ctx, SSL_MODE_AUTO_RETRY);
+    // 设置CA证书，用于验证服务端证书
+    if (SSL_CTX_load_verify_locations(ctx, g_Config->m_caCert, NULL)) {
+      // 设置需要验证服务端证书
+      SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, verify_callback);
       SSL_CTX_set_session_cache_mode(ctx, SSL_SESS_CACHE_CLIENT);
       // SSL_CTX_set_default_passwd_cb_userdata(ctx,
-      //         const_cast<void*>(static_cast<const void*>("12345")));
+      //         const_cast<void*>(static_cast<const void*>("12345"))); // 设置证书passwd
+      // SSL_CTX_set_verify_depth(ctx, 0); // depth需要根据证书实际来设置，不设置采用自适应
+      // SSL_CTX_set_mode(ctx, SSL_MODE_AUTO_RETRY); // 如果使用了多路复用机制最好不用
+      // SSL_CTX_set_client_CA_list(ctx, SSL_load_client_CA_file(g_Config->m_caCert));
+      // SSL_CTX_set_default_verify_paths(ctx);
     } else {
       printf("CA file not exists or cannot read: %s\n", g_Config->m_caCert);
+      // 设置不验证服务端证书
+      SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
     }
+  } else {
+    // 设置不验证服务端证书
+    SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
   }
 
-  if (strlen(g_Config->m_clientCert) > 0) {
-    if (access(g_Config->m_clientCert, R_OK) != -1) {
-      // 客户端证书，双向认证时需要
-      SSL_CTX_use_certificate_file(ctx, g_Config->m_clientCert, SSL_FILETYPE_PEM);
-
-      if (strlen(g_Config->m_clientKey) > 0) {
-        if (access(g_Config->m_clientKey, R_OK) != -1) {
-          // 客户端密钥文件，双向认证时需要
-          SSL_CTX_use_PrivateKey_file(ctx, g_Config->m_clientKey, SSL_FILETYPE_PEM);
-          // 验证密钥是否与证书一致
-          SSL_CTX_check_private_key(ctx);
-        } else {
-          printf("ClientKey file not exists or cannot read: %s\n", g_Config->m_clientKey);
+  if (strlen(g_Config->m_clientCert) > 0 && strlen(g_Config->m_clientKey) > 0) {
+    // 客户端证书，双向认证时需要
+    if (SSL_CTX_use_certificate_file(ctx, g_Config->m_clientCert, SSL_FILETYPE_PEM)) {
+      // 客户端密钥文件，双向认证时需要
+      if (SSL_CTX_use_PrivateKey_file(ctx, g_Config->m_clientKey, SSL_FILETYPE_PEM)) {
+        // 验证密钥是否与证书一致
+        if (!SSL_CTX_check_private_key(ctx)) {
+          printf("client certificate check failed, cert: %s, key: %s\n", g_Config->m_clientCert,
+                 g_Config->m_clientKey);
         }
+      } else {
+        printf("ClientKey file not exists or cannot read: %s\n", g_Config->m_clientKey);
       }
     } else {
       printf("ClientCert file not exists or cannot read: %s\n", g_Config->m_clientCert);
@@ -224,16 +233,14 @@ bool HttpsClient::connectServer(TConfig* g_Config) {
   /* 建立 SSL 连接 */
   SSL_set_tlsext_host_name(ssl, g_Config->m_pszHost);
   if (SSL_connect(ssl) < 0) {
-    snprintf(m_szErrMsg, sizeof(m_szErrMsg), "ssl connect failed: %s[%s:%d]", strerror(errno),
+    snprintf(m_szErrMsg, sizeof(m_szErrMsg), "ssl verify failed: %s[%s:%d]", strerror(errno),
              __FILE__, __LINE__);
     disconnect();
     return false;
   }
-  // else
-  // {
-  //    printf("Connected with %s encryption\n", SSL_get_cipher(ssl));
-  //    ShowCerts(ssl);
-  // }
+
+  // printf("Connected with encryption: %s:%s\n", SSL_get_version(ssl), SSL_get_cipher(ssl));
+  // show_certs(ssl);
 
   return true;
 }

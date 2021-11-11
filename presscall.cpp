@@ -310,17 +310,21 @@ void initConfig(int argc, char** argv) {
 
   path[rootPathLen] = '\0';
   char tmp[256];
-  if (g_Config.m_caCert[0] != '/') {
+  if (strlen(g_Config.m_caCert) > 0 && g_Config.m_caCert[0] != '/') {
     memcpy(tmp, g_Config.m_caCert, strlen(g_Config.m_caCert) + 1);
     snprintf(g_Config.m_caCert, sizeof(g_Config.m_caCert), "%s%s", path, tmp);
   }
-  if (g_Config.m_clientCert[0] != '/') {
+  if (strlen(g_Config.m_clientCert) > 0 && g_Config.m_clientCert[0] != '/') {
     memcpy(tmp, g_Config.m_clientCert, strlen(g_Config.m_clientCert) + 1);
     snprintf(g_Config.m_clientCert, sizeof(g_Config.m_clientCert), "%s%s", path, tmp);
-  }
-  if (g_Config.m_clientKey[0] != '/') {
-    memcpy(tmp, g_Config.m_clientKey, strlen(g_Config.m_clientKey) + 1);
-    snprintf(g_Config.m_clientKey, sizeof(g_Config.m_clientKey), "%s%s", path, tmp);
+    if (strlen(g_Config.m_clientKey) > 0) {
+      if (g_Config.m_clientKey[0] != '/') {
+        memcpy(tmp, g_Config.m_clientKey, strlen(g_Config.m_clientKey) + 1);
+        snprintf(g_Config.m_clientKey, sizeof(g_Config.m_clientKey), "%s%s", path, tmp);
+      }
+    } else {
+      memcpy(g_Config.m_clientKey, g_Config.m_clientCert, strlen(g_Config.m_clientCert) + 1);
+    }
   }
 
   /* 根据arg参数个数来判断通过命令行传入的值，每个case都不需要break语句。
