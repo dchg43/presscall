@@ -5,7 +5,6 @@
 #define PRESSCALL_ALL_IN_ONE_HTTPS_CLIENT_H_
 
 #include <openssl/ssl.h>
-#include <string.h>
 
 #include "virtual_client.h"
 
@@ -16,7 +15,6 @@ void build_https_buffer(TConfig* g_Config);
 class HttpsClient : public VirtualClient {
  public:
   HttpsClient() {
-    memset(m_szErrMsg, 0, sizeof(m_szErrMsg));
     ssl = NULL;
     m_Config = NULL;
   }

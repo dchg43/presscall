@@ -5,6 +5,8 @@
 #define PRESSCALL_ALL_IN_ONE_VIRTUAL_CLIENT_H_
 
 #include <fcntl.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include "tlib_cfg.h"
 
@@ -16,6 +18,7 @@ typedef struct {
 class VirtualClient {
  public:
   VirtualClient() {
+    memset(m_szErrMsg, 0, sizeof(m_szErrMsg));
     m_isocket = -1;
     isTimeEnd = NULL;
     cookies = NULL;
@@ -43,6 +46,9 @@ class VirtualClient {
     return cookies;
   }
   void setCookie(char* setCookies) {
+    if (cookies != NULL) {
+      free(cookies);
+    }
     cookies = setCookies;
   }
   void setTimeEnd(volatile bool* timeEnd) {
@@ -55,6 +61,9 @@ class VirtualClient {
     return m_isocket;
   }
   void setServer(struct sockaddr* clientServer) {
+    if (server != NULL) {
+      free(server);
+    }
     server = clientServer;
   }
 

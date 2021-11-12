@@ -4,8 +4,6 @@
 #ifndef PRESSCALL_ALL_IN_ONE_TCP_CLIENT_H_
 #define PRESSCALL_ALL_IN_ONE_TCP_CLIENT_H_
 
-#include <string.h>
-
 #include "virtual_client.h"
 
 void build_cs_buffer(TConfig* g_Config);
@@ -13,7 +11,6 @@ void build_cs_buffer(TConfig* g_Config);
 class TcpClient : public VirtualClient {
  public:
   TcpClient() {
-    memset(m_szErrMsg, 0, sizeof(m_szErrMsg));
     m_Config = NULL;
   }
   ~TcpClient() {

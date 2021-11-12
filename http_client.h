@@ -4,8 +4,6 @@
 #ifndef PRESSCALL_ALL_IN_ONE_HTTP_CLIENT_H_
 #define PRESSCALL_ALL_IN_ONE_HTTP_CLIENT_H_
 
-#include <string.h>
-
 #include "virtual_client.h"
 
 void build_http_buffer(TConfig* g_Config);
@@ -13,7 +11,6 @@ void build_http_buffer(TConfig* g_Config);
 class HttpClient : public VirtualClient {
  public:
   HttpClient() {
-    memset(m_szErrMsg, 0, sizeof(m_szErrMsg));
     m_Config = NULL;
   }
   ~HttpClient() {

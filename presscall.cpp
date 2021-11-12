@@ -84,6 +84,7 @@ void* thread_func(void* arg) {
     pUserFunc->setTimeEnd(&isTimeEnd);
   } catch (char* err) {
     printf("ERR: thread %d run error: %s\n", iMyID, err);
+    free(err);
     delete pUserFunc;
     thread_running[iMyID] = 0;
     return NULL;
@@ -107,6 +108,7 @@ void* thread_func(void* arg) {
     } catch (char* err) {
       llRspTimeUs = 0;
       printf("ERR: thread %d run error: %s\n", iMyID, err);
+      free(err);
       usSleep(100000);
     } catch (...) {
       llRspTimeUs = 0;
@@ -249,28 +251,36 @@ void* child_func(void* arg) {
 void initConfig(int argc, char** argv) {
   // 获取参数
   char path[PATH_MAX];
-  int maxPathLen = sizeof(path) - strlen(CFGFILE) - 2;
-  int ret = readlink("/proc/self/exe", path, maxPathLen);
-  if (ret >= 0 && ret < maxPathLen) {  // 等于maxPathLen说明长度超过了PATH_MAX
-    path[ret] = '\0';
-    char* ptr = strrchr(path, '/');
-    if (ptr != NULL) {
-      *(ptr + 1) = '\0';
-    } else {
-      strncat(path, "/", 1);
-    }
+  int maxPathLen = sizeof(path) - strlen(CFGFILE) - 1;
+
+  if (*(argv[0]) == '/') {
+    memcpy(path, argv[0], strlen(argv[0]) + 1);
   } else {
     char* ptr = getcwd(path, maxPathLen);
     if (ptr == NULL) {
-      // 出错了，结束程序
-      printf("get conf file failed\n");
-      fflush(stdout);
-      exit(1);
+      int ret = readlink("/proc/self/exe", path, maxPathLen);
+      if (ret < 0 || ret >= maxPathLen) {  // 等于maxPathLen说明长度超过了PATH_MAX
+        // 出错了，结束程序
+        printf("get conf file path failed\n");
+        fflush(stdout);
+        exit(1);
+      }
+      path[ret] = '\0';  // readlink返回字符串不是以\0结尾
+    } else {
+      strncat(path, "/", 2);  // getcwd获取的路径最后没有'/'
+      strncat(path, argv[0], strlen(argv[0]) + 1);
     }
-    strncat(path, "/", 1);
   }
+  // 去掉可执行文件名，得到目录
+  char* ptr = strrchr(path, '/');
+  if (ptr != NULL) {
+    *(ptr + 1) = '\0';
+  } else {
+    memcpy(path, "/", 2);
+  }
+
   int rootPathLen = strlen(path);
-  strncat(path, CFGFILE, strlen(CFGFILE));
+  strncat(path, CFGFILE, strlen(CFGFILE) + 1);
   printf("Config file: %s\n", path);
 
   memset(&g_Config, 0, sizeof(g_Config));
