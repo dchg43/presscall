@@ -1,7 +1,6 @@
-#include ../../incl.mk
-
-# CFLAGS += -g -Wall -O2
-LIB += -ldl -lssl -lcrypto -lpthread
+CFLAGS += -Wall -O2
+# DEBUGFLAG = -g
+LIB += -lstdc++ -ldl -lcrypto -lpthread -lssl
 # INC += -std=c++0x
 
 OBJ = \
@@ -16,10 +15,10 @@ OBJ = \
 TARGET = presscall
 #############################################################
 $(TARGET): $(OBJ)
-	g++ -o $@ $^ $(LIB)
+	gcc $(CFLAGS) -o $@ $^ $(LIB)
 
 %.o: %.cpp %.h
-	g++ $(CFLAGS) $(INC) -c -o $@ $<
+	gcc $(CFLAGS) $(DEBUGFLAG) $(INC) -c -o $@ $<
 
 clean:
 	rm -f *.o $(TARGET)
