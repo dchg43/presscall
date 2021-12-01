@@ -25,6 +25,8 @@
 volatile bool isStarted = false;
 // 是否时间到
 volatile bool isTimeEnd = false;
+// 是否正在加载配置
+volatile bool loading = true;
 // 已运行时间(us)
 int64_t iUsecRuned = 0;
 volatile int stopTimeout = 40960000;  // 最多等待40秒: 40960000us
@@ -40,6 +42,8 @@ struct ThreadArray* threads_array = NULL;
 int* thread_running = NULL;
 // 单位时间结果的汇总值和临时变量
 struct TResult m_ResultTmp;
+// 存放配置文件路径
+char path[PATH_MAX];
 
 TConfig g_Config;
 pthread_attr_t attr;
@@ -56,6 +60,14 @@ int sleepAndCheck(int64_t sleepEndTimeUs, int64_t curTime);
  功能描述  : 线程函数
 *****************************************************************************/
 void* thread_func(void* arg) {
+  // 子线程忽略所有信号
+  sigset_t mask;
+  sigfillset(&mask);
+  int err = pthread_sigmask(SIG_BLOCK, &mask, NULL);
+  if (err != 0) {
+    printf("ERR: set sigmask failed: %d, %s/n", err, strerror(err));
+  }
+
   // TConfig* config = (TConfig*)arg;
   int iMyID = *static_cast<int*>(arg);
   if (threads_array[iMyID].call_numbers == 0) {
@@ -71,8 +83,13 @@ void* thread_func(void* arg) {
   // 每个线程启动前先等一个时间，各线程等待时间不同
   // 使请求均匀的分布，不然并发连接太多会有部分连接失败
   int iStartWaitus;
-  if (g_Config.m_iThreadSleepUs / g_Config.m_iThreadNum > 0) {
-    iStartWaitus = g_Config.m_iThreadSleepUs * iMyID / g_Config.m_iThreadNum;
+  if (g_Config.m_iThreadSleepUs > 0) {
+    // 需要先除再乘，不然可能会越界，整数上限2147483647
+    if (INT_MAX / g_Config.m_iThreadSleepUs < iMyID) {
+      iStartWaitus = g_Config.m_iThreadSleepUs / g_Config.m_iThreadNum * iMyID;
+    } else {
+      iStartWaitus = g_Config.m_iThreadSleepUs * iMyID / g_Config.m_iThreadNum;
+    }
   } else {
     iStartWaitus = 10000 * iMyID / g_Config.m_iThreadNum;
   }
@@ -188,7 +205,8 @@ void* child_func(void* arg) {
   // int iMyID = *static_cast<int*>(arg);
   // 栈大小最小值16384，即16KB，默认8MB
   int ret, realThreadNum = 0;
-  int callPerThread = -1, remain = -1;
+  int64_t callPerThread = -1;
+  int64_t remain = -1;
   if (g_Config.m_iCallNumbers > 0) {
     callPerThread = g_Config.m_iCallNumbers / g_Config.m_iThreadNum;
     remain = g_Config.m_iCallNumbers - callPerThread * g_Config.m_iThreadNum;
@@ -196,10 +214,10 @@ void* child_func(void* arg) {
   isStarted = true;
   // 创建线程
   for (int i = 0; i < g_Config.m_iThreadNum; i++) {
-    if (i < remain) {
+    if ((int64_t)i < remain) {
       threads_array[i].call_numbers = callPerThread + 1;
     } else {
-      if (callPerThread == 0) {
+      if (callPerThread == 0L) {
         // 请求数为0，不需要起线程
         thread_running[i] = 0;
         continue;
@@ -248,9 +266,8 @@ void* child_func(void* arg) {
   return NULL;
 }
 
-void initConfig(int argc, char** argv) {
+void initConfigPath(int argc, char** argv) {
   // 获取参数
-  char path[PATH_MAX];
   int maxPathLen = sizeof(path) - strlen(CFGFILE) - 1;
 
   if (*(argv[0]) == '/') {
@@ -268,7 +285,11 @@ void initConfig(int argc, char** argv) {
       path[ret] = '\0';  // readlink返回字符串不是以\0结尾
     } else {
       strncat(path, "/", 2);  // getcwd获取的路径最后没有'/'
-      strncat(path, argv[0], strlen(argv[0]) + 1);
+      if (strlen(argv[0]) > 1 && argv[0][0] == '.' && argv[0][1] == '/') {
+        strncat(path, argv[0] + 2, strlen(argv[0]) + 1 - 2);
+      } else {
+        strncat(path, argv[0], strlen(argv[0]) + 1);
+      }
     }
   }
   // 去掉可执行文件名，得到目录
@@ -279,82 +300,86 @@ void initConfig(int argc, char** argv) {
     memcpy(path, "/", 2);
   }
 
-  int rootPathLen = strlen(path);
+  // int rootPathLen = strlen(path);
   strncat(path, CFGFILE, strlen(CFGFILE) + 1);
   printf("Config file: %s\n", path);
+}
 
-  memset(&g_Config, 0, sizeof(g_Config));
+void initConfig(TConfig* t_Config) {
+  memset(t_Config, 0, sizeof(*t_Config));
   char errLogPath[120];
   TLib_Cfg_GetConfig(
       path,  // config file path
-      "Host", CFG_STRING, g_Config.m_szDestIp, "127.0.0.1", sizeof(g_Config.m_szDestIp),  // Host
-      "HttpMethod", CFG_STRING, g_Config.m_szMethod, "GET", sizeof(g_Config.m_szMethod),  // Method
-      "Port", CFG_INT, &(g_Config.m_iDestPort), 80,                                       // Port
-      "ThreadNum", CFG_INT, &(g_Config.m_iThreadNum), 1,             // Thread number
-      "ThreadSleepMs", CFG_INT, &(g_Config.m_iThreadSleepUs), 0,     // sleep time
-      "RunDuration", CFG_INT64, &(g_Config.m_iRunDuration), 0LL,     // run time
-      "CallNumbers", CFG_INT64, &(g_Config.m_iCallNumbers), 0LL,     // Call Numbers
-      "SampleSecs", CFG_INT64, &(g_Config.m_iSampleUs), 1LL,         //
-      "TestMode", CFG_INT, &(g_Config.m_test_mode), 1,               //
-      "LongConnection", CFG_INT, &(g_Config.m_iLongConn), 0,         //
+      "Host", CFG_STRING, t_Config->m_szDestIp, "127.0.0.1", sizeof(t_Config->m_szDestIp),  // Host
+      "HttpMethod", CFG_STRING, t_Config->m_szMethod, "GET",
+      sizeof(t_Config->m_szMethod),                                  // Method
+      "Port", CFG_INT, &(t_Config->m_iDestPort), 80,                 // Port
+      "ThreadNum", CFG_INT, &(t_Config->m_iThreadNum), 1,            // Thread number
+      "ThreadSleepMs", CFG_INT, &(t_Config->m_iThreadSleepUs), 0,    // sleep time
+      "RunDuration", CFG_INT64, &(t_Config->m_iRunDuration), 0LL,    // run time
+      "CallNumbers", CFG_INT64, &(t_Config->m_iCallNumbers), 0LL,    // Call Numbers
+      "SampleSecs", CFG_INT64, &(t_Config->m_iSampleUs), 1LL,        //
+      "TestMode", CFG_INT, &(t_Config->m_test_mode), 1,              //
+      "LongConnection", CFG_INT, &(t_Config->m_iLongConn), 0,        //
       "PrintError", CFG_STRING, errLogPath, "", sizeof(errLogPath),  //
-      "useDiffPort", CFG_INT, &(g_Config.m_iUseDiffPort), 0,         //
-      "MsgTimeout", CFG_INT64, &(g_Config.m_iTimeout), 60000000LL,   //
-      "LingerTime", CFG_INT, &(g_Config.m_iLingerTime), 1,           //
-      "MsgLen", CFG_INT, &(g_Config.m_iLen), 0,                      //
-      "GetFile", CFG_STRING, &(g_Config.m_pszGetFile), "", sizeof(g_Config.m_pszGetFile),  //
-      "GetFileLen", CFG_INT, &(g_Config.m_iRecvLen), RECV_MAX_LEN - MAX_HEADER_LEN,        //
-      "Domain", CFG_STRING, &(g_Config.m_pszHost), "", sizeof(g_Config.m_pszHost),         //
+      "useDiffPort", CFG_INT, &(t_Config->m_iUseDiffPort), 0,        //
+      "MsgTimeout", CFG_INT64, &(t_Config->m_iTimeout), 60000000LL,  //
+      "LingerTime", CFG_INT, &(t_Config->m_iLingerTime), 1,          //
+      "MsgLen", CFG_INT, &(t_Config->m_iLen), 0,                     //
+      "GetFile", CFG_STRING, &(t_Config->m_pszGetFile), "", sizeof(t_Config->m_pszGetFile),  //
+      "GetFileLen", CFG_INT, &(t_Config->m_iRecvLen), RECV_MAX_LEN - MAX_HEADER_LEN,         //
+      "Domain", CFG_STRING, &(t_Config->m_pszHost), "", sizeof(t_Config->m_pszHost),         //
 
-      "SockAddress", CFG_STRING, &(g_Config.m_szSockAddr), "", sizeof(g_Config.m_szSockAddr),     //
-      "CaCert", CFG_STRING, &(g_Config.m_caCert), "", sizeof(g_Config.m_caCert),                  //
-      "ClientCert", CFG_STRING, &(g_Config.m_clientCert), "", sizeof(g_Config.m_clientCert),      //
-      "ClientKey", CFG_STRING, &(g_Config.m_clientKey), "", sizeof(g_Config.m_clientKey),         //
-      "ssl_protocol", CFG_STRING, &(g_Config.m_tlsProtocol), "", sizeof(g_Config.m_tlsProtocol),  //
-      "ssl_ciphers", CFG_STRING, &(g_Config.m_tlsCiphers), "", sizeof(g_Config.m_tlsCiphers),     //
-      "RspTimeLevel1", CFG_INT, &(g_Config.m_iTimeLevel1), 10,                                    //
-      "RspTimeLevel2", CFG_INT, &(g_Config.m_iTimeLevel2), 100,                                   //
-      "RspTimeLevel3", CFG_INT, &(g_Config.m_iTimeLevel3), 1000,                                  //
+      "SockAddress", CFG_STRING, &(t_Config->m_szSockAddr), "", sizeof(t_Config->m_szSockAddr),  //
+      "CaCert", CFG_STRING, &(t_Config->m_caCert), "", sizeof(t_Config->m_caCert),               //
+      "ClientCert", CFG_STRING, &(t_Config->m_clientCert), "", sizeof(t_Config->m_clientCert),   //
+      "ClientKey", CFG_STRING, &(t_Config->m_clientKey), "", sizeof(t_Config->m_clientKey),      //
+      "ssl_protocol", CFG_STRING, &(t_Config->m_tlsProtocol), "",
+      sizeof(t_Config->m_tlsProtocol),                                                           //
+      "ssl_ciphers", CFG_STRING, &(t_Config->m_tlsCiphers), "", sizeof(t_Config->m_tlsCiphers),  //
+      "RspTimeLevel1", CFG_INT, &(t_Config->m_iTimeLevel1), 10,                                  //
+      "RspTimeLevel2", CFG_INT, &(t_Config->m_iTimeLevel2), 100,                                 //
+      "RspTimeLevel3", CFG_INT, &(t_Config->m_iTimeLevel3), 1000,                                //
       // "double_example", CFG_DOUBLE, &test, 1000.123D,
       NULL);
 
-  path[rootPathLen] = '\0';
-  char tmp[256];
-  if (strlen(g_Config.m_caCert) > 0 && g_Config.m_caCert[0] != '/') {
-    memcpy(tmp, g_Config.m_caCert, strlen(g_Config.m_caCert) + 1);
-    snprintf(g_Config.m_caCert, sizeof(g_Config.m_caCert), "%s%s", path, tmp);
-  }
-  if (strlen(g_Config.m_clientCert) > 0 && g_Config.m_clientCert[0] != '/') {
-    memcpy(tmp, g_Config.m_clientCert, strlen(g_Config.m_clientCert) + 1);
-    snprintf(g_Config.m_clientCert, sizeof(g_Config.m_clientCert), "%s%s", path, tmp);
-    if (strlen(g_Config.m_clientKey) > 0) {
-      if (g_Config.m_clientKey[0] != '/') {
-        memcpy(tmp, g_Config.m_clientKey, strlen(g_Config.m_clientKey) + 1);
-        snprintf(g_Config.m_clientKey, sizeof(g_Config.m_clientKey), "%s%s", path, tmp);
-      }
-    } else {
-      memcpy(g_Config.m_clientKey, g_Config.m_clientCert, strlen(g_Config.m_clientCert) + 1);
+  if (strcmp(errLogPath, "0") == 0) {
+    t_Config->m_iPrintError = 0;
+    t_Config->errLogOut = stdout;
+  } else if (strcasecmp(errLogPath, "stderr") == 0 || strcmp(errLogPath, "1") == 0) {
+    t_Config->m_iPrintError = 1;
+    t_Config->errLogOut = stderr;
+  } else if (strcasecmp(errLogPath, "stdout") == 0) {
+    t_Config->m_iPrintError = 1;
+    t_Config->errLogOut = stdout;
+  } else {
+    t_Config->m_iPrintError = 1;
+    t_Config->errLogOut = fopen(errLogPath, "wb");
+    if (t_Config->errLogOut == NULL) {
+      t_Config->errLogOut = stderr;
     }
   }
+}
 
+void initConfigCmd(TConfig* t_Config, int argc, char** argv) {
   /* 根据arg参数个数来判断通过命令行传入的值，每个case都不需要break语句。
      其他参数使用配置文件的值 */
   switch (argc) {
     case 9:
-      g_Config.m_iTimeLevel3 = atoi(argv[8]);
+      t_Config->m_iTimeLevel3 = atoi(argv[8]);
     case 8:
-      g_Config.m_iTimeLevel2 = atoi(argv[7]);
+      t_Config->m_iTimeLevel2 = atoi(argv[7]);
     case 7:
-      g_Config.m_iTimeLevel1 = atoi(argv[6]);
+      t_Config->m_iTimeLevel1 = atoi(argv[6]);
     case 6:
-      g_Config.m_iSampleUs = atoi(argv[5]);
+      t_Config->m_iSampleUs = atoi(argv[5]);
     case 5:
-      g_Config.m_iRunDuration = atoi(argv[4]);
+      t_Config->m_iRunDuration = atoi(argv[4]);
     case 4:
-      g_Config.m_iThreadNum = atoi(argv[3]);
+      t_Config->m_iThreadNum = atoi(argv[3]);
     case 3:
-      strncpy(g_Config.m_szDestIp, argv[1], strlen(argv[1]) + 1);
-      g_Config.m_iDestPort = atoi(argv[2]);
+      strncpy(t_Config->m_szDestIp, argv[1], strlen(argv[1]) + 1);
+      t_Config->m_iDestPort = atoi(argv[2]);
     case 1:  // 防止执行default
       break;
     default:  // 至少需要2个参数
@@ -366,95 +391,113 @@ void initConfig(int argc, char** argv) {
       fflush(stdout);
       exit(1);
   }
-
-  if (strcmp(errLogPath, "0") == 0) {
-    g_Config.m_iPrintError = 0;
-    g_Config.errLogOut = stdout;
-  } else if (strcasecmp(errLogPath, "stderr") == 0 || strcmp(errLogPath, "1") == 0) {
-    g_Config.m_iPrintError = 1;
-    g_Config.errLogOut = stderr;
-  } else if (strcasecmp(errLogPath, "stdout") == 0) {
-    g_Config.m_iPrintError = 1;
-    g_Config.errLogOut = stdout;
-  } else {
-    g_Config.m_iPrintError = 1;
-    g_Config.errLogOut = fopen(errLogPath, "wb");
-    if (g_Config.errLogOut == NULL) {
-      g_Config.errLogOut = stderr;
-    }
-  }
 }
 
-void normally_config() {
-  if (g_Config.m_iLen > SEND_MAX_LEN) {
+void normally_config(TConfig* t_Config) {
+  if (t_Config->m_iLen > SEND_MAX_LEN) {
     printf("WARN: msgLen is too big, please make sure not have 400 or 414 response\n");
     fflush(stdout);
     // exit(2);
   }
 
-  if (g_Config.m_pszGetFile[0] != '/') {
-    g_Config.m_pszGetFile[strlen(g_Config.m_pszGetFile) + 1] = '\0';
-    for (int i = strlen(g_Config.m_pszGetFile); i > 0; i--) {
-      g_Config.m_pszGetFile[i] = g_Config.m_pszGetFile[i - 1];
-    }
-    g_Config.m_pszGetFile[0] = '/';
+  char workDir[PATH_MAX];
+  char* ptr = strrchr(path, '/');
+  if (ptr != NULL) {
+    memcpy(workDir, path, ptr - path);
+  } else {
+    memcpy(workDir, ".", 2);
   }
 
-  if (strlen(g_Config.m_pszHost) == 0) {
-    if (strstr(g_Config.m_szDestIp, ":")) {
-      snprintf(g_Config.m_pszHost, sizeof(g_Config.m_pszHost), "[%s]:%d", g_Config.m_szDestIp,
-               g_Config.m_iDestPort);
+  char tmp[256];
+  if (strlen(t_Config->m_caCert) > 0 && t_Config->m_caCert[0] != '/') {
+    memcpy(tmp, t_Config->m_caCert, strlen(t_Config->m_caCert) + 1);
+    snprintf(t_Config->m_caCert, sizeof(t_Config->m_caCert), "%s/%s", workDir, tmp);
+  }
+  if (strlen(t_Config->m_clientCert) > 0 && t_Config->m_clientCert[0] != '/') {
+    memcpy(tmp, t_Config->m_clientCert, strlen(t_Config->m_clientCert) + 1);
+    snprintf(t_Config->m_clientCert, sizeof(t_Config->m_clientCert), "%s/%s", workDir, tmp);
+    if (strlen(t_Config->m_clientKey) > 0) {
+      if (t_Config->m_clientKey[0] != '/') {
+        memcpy(tmp, t_Config->m_clientKey, strlen(t_Config->m_clientKey) + 1);
+        snprintf(t_Config->m_clientKey, sizeof(t_Config->m_clientKey), "%s/%s", workDir, tmp);
+      }
     } else {
-      snprintf(g_Config.m_pszHost, sizeof(g_Config.m_pszHost), "%s:%d", g_Config.m_szDestIp,
-               g_Config.m_iDestPort);
+      memcpy(t_Config->m_clientKey, t_Config->m_clientCert, strlen(t_Config->m_clientCert) + 1);
     }
   }
 
-  if (strcasecmp(g_Config.m_szMethod, "POST") == 0) {
-    memcpy(g_Config.m_szMethod, "POST", 5);
-  } else {
-    memcpy(g_Config.m_szMethod, "GET", 4);
+  if (t_Config->m_pszGetFile[0] != '/') {
+    t_Config->m_pszGetFile[strlen(t_Config->m_pszGetFile) + 1] = '\0';
+    for (int i = strlen(t_Config->m_pszGetFile); i > 0; i--) {
+      t_Config->m_pszGetFile[i] = t_Config->m_pszGetFile[i - 1];
+    }
+    t_Config->m_pszGetFile[0] = '/';
   }
 
-  if (strstr(g_Config.m_szDestIp, ":")) {
-    printf("%s %s://[%s]:%d%s, Domain: %s\n", g_Config.m_szMethod,
-           g_Config.m_test_mode == 1 ? "http" : (g_Config.m_test_mode == 2 ? "https" : "tcp"),
-           g_Config.m_szDestIp, g_Config.m_iDestPort, g_Config.m_pszGetFile, g_Config.m_pszHost);
+  if (strlen(t_Config->m_pszHost) == 0) {
+    if (strstr(t_Config->m_szDestIp, ":")) {
+      snprintf(t_Config->m_pszHost, sizeof(t_Config->m_pszHost), "[%s]:%d", t_Config->m_szDestIp,
+               t_Config->m_iDestPort);
+    } else {
+      snprintf(t_Config->m_pszHost, sizeof(t_Config->m_pszHost), "%s:%d", t_Config->m_szDestIp,
+               t_Config->m_iDestPort);
+    }
+  }
+
+  if (strcasecmp(t_Config->m_szMethod, "POST") == 0) {
+    memcpy(t_Config->m_szMethod, "POST", strlen("POST") + 1);
   } else {
-    printf("%s %s://%s:%d%s, Domain: %s\n", g_Config.m_szMethod,
-           g_Config.m_test_mode == 1 ? "http" : (g_Config.m_test_mode == 2 ? "https" : "tcp"),
-           g_Config.m_szDestIp, g_Config.m_iDestPort, g_Config.m_pszGetFile, g_Config.m_pszHost);
+    memcpy(t_Config->m_szMethod, "GET", strlen("GET") + 1);
+  }
+
+  char tmpPort[32];
+  if (t_Config->m_iUseDiffPort == 0 || t_Config->m_iThreadNum <= 1) {
+    snprintf(tmpPort, sizeof(tmpPort), "%d", t_Config->m_iDestPort);
+  } else {
+    snprintf(tmpPort, sizeof(tmpPort), "[%d-%d]", t_Config->m_iDestPort,
+             t_Config->m_iDestPort + t_Config->m_iThreadNum - 1);
+  }
+
+  if (strstr(t_Config->m_szDestIp, ":")) {
+    printf("%s %s://[%s]:%s%s, Domain: %s\n", t_Config->m_szMethod,
+           t_Config->m_test_mode == 1 ? "http" : (t_Config->m_test_mode == 2 ? "https" : "tcp"),
+           t_Config->m_szDestIp, tmpPort, t_Config->m_pszGetFile, t_Config->m_pszHost);
+  } else {
+    printf("%s %s://%s:%s%s, Domain: %s\n", t_Config->m_szMethod,
+           t_Config->m_test_mode == 1 ? "http" : (t_Config->m_test_mode == 2 ? "https" : "tcp"),
+           t_Config->m_szDestIp, tmpPort, t_Config->m_pszGetFile, t_Config->m_pszHost);
   }
   printf("LongConnection %d  MsgLen %d  every %dms  duration %lus level(ms):%d,%d,%d\n",
-         g_Config.m_iLongConn, g_Config.m_iLen, g_Config.m_iThreadSleepUs, g_Config.m_iRunDuration,
-         g_Config.m_iTimeLevel1, g_Config.m_iTimeLevel2, g_Config.m_iTimeLevel3);
+         t_Config->m_iLongConn, t_Config->m_iLen, t_Config->m_iThreadSleepUs,
+         t_Config->m_iRunDuration, t_Config->m_iTimeLevel1, t_Config->m_iTimeLevel2,
+         t_Config->m_iTimeLevel3);
 
-  if (g_Config.m_iSampleUs > 0 && LLONG_MAX / 1000000 > g_Config.m_iSampleUs) {
-    g_Config.m_iSampleUs = g_Config.m_iSampleUs * 1000000;
+  if (t_Config->m_iSampleUs > 0 && LLONG_MAX / 1000000 > t_Config->m_iSampleUs) {
+    t_Config->m_iSampleUs = t_Config->m_iSampleUs * 1000000;
   } else {
-    g_Config.m_iSampleUs = 1000000;
+    t_Config->m_iSampleUs = 1000000;
   }
-  g_Config.m_iThreadSleepUs = g_Config.m_iThreadSleepUs * 1000;
-  g_Config.m_iTimeLevel1 = g_Config.m_iTimeLevel1 * 1000;
-  g_Config.m_iTimeLevel2 = g_Config.m_iTimeLevel2 * 1000;
-  g_Config.m_iTimeLevel3 = g_Config.m_iTimeLevel3 * 1000;
-  if (g_Config.m_iRecvLen <= 0) {
-    g_Config.m_iRecvLen = RECV_MAX_LEN;
+  t_Config->m_iThreadSleepUs = t_Config->m_iThreadSleepUs * 1000;
+  t_Config->m_iTimeLevel1 = t_Config->m_iTimeLevel1 * 1000;
+  t_Config->m_iTimeLevel2 = t_Config->m_iTimeLevel2 * 1000;
+  t_Config->m_iTimeLevel3 = t_Config->m_iTimeLevel3 * 1000;
+  if (t_Config->m_iRecvLen <= 0) {
+    t_Config->m_iRecvLen = RECV_MAX_LEN;
   } else {
-    g_Config.m_iRecvLen = g_Config.m_iRecvLen + MAX_HEADER_LEN;
+    t_Config->m_iRecvLen = t_Config->m_iRecvLen + MAX_HEADER_LEN;
   }
-  if (g_Config.m_iThreadNum <= 0) {
-    g_Config.m_iThreadNum = 1;
+  if (t_Config->m_iThreadNum <= 0) {
+    t_Config->m_iThreadNum = 1;
   }
-  if (g_Config.m_iLen < 0) {
-    g_Config.m_iLen = 0;
+  if (t_Config->m_iLen < 0) {
+    t_Config->m_iLen = 0;
   }
 }
 
-void normally_ip() {
-  g_Config.sockAddr = NULL;
-  if (strlen(g_Config.m_szSockAddr) > 0) {
-    std::string str_szSockAddr = g_Config.m_szSockAddr;
+void normally_ip(TConfig* t_Config) {
+  t_Config->sockAddr = NULL;
+  if (strlen(t_Config->m_szSockAddr) > 0) {
+    std::string str_szSockAddr = t_Config->m_szSockAddr;
     if (str_szSockAddr.find(":", 0) != std::string::npos) {
       struct addrinfo addrCriteria;
       memset(&addrCriteria, 0, sizeof(addrCriteria));
@@ -463,7 +506,8 @@ void normally_ip() {
       addrCriteria.ai_flags = AI_PASSIVE;
       addrCriteria.ai_protocol = IPPROTO_TCP;
       struct addrinfo* addrList;
-      int retVal = getaddrinfo((const char*)&g_Config.m_szSockAddr, NULL, &addrCriteria, &addrList);
+      int retVal =
+          getaddrinfo((const char*)&t_Config->m_szSockAddr, NULL, &addrCriteria, &addrList);
       if (retVal != 0) {
         printf("Get local address error: %s\n", gai_strerror(retVal));
         fflush(stdout);
@@ -476,8 +520,8 @@ void normally_ip() {
         freeaddrinfo(addrList);
       } else {
         struct in6_addr m_v6_src;
-        if (inet_pton(AF_INET6, g_Config.m_szSockAddr, &m_v6_src) <= 0) {
-          printf("V6Host is incorrect: %s\n", g_Config.m_szSockAddr);
+        if (inet_pton(AF_INET6, t_Config->m_szSockAddr, &m_v6_src) <= 0) {
+          printf("V6Host is incorrect: %s\n", t_Config->m_szSockAddr);
           fflush(stdout);
           exit(2);
         }
@@ -486,14 +530,14 @@ void normally_ip() {
         client6->sin6_scope_id = 0;
         memcpy(&client6->sin6_addr, (struct in6_addr*)&m_v6_src, sizeof(m_v6_src));
       }
-      g_Config.sockAddr = (struct sockaddr*)client6;
+      t_Config->sockAddr = (struct sockaddr*)client6;
     } else {
-      int m_iSrcIp = inet_addr(g_Config.m_szSockAddr);
+      int m_iSrcIp = inet_addr(t_Config->m_szSockAddr);
       struct sockaddr_in* client4 = new sockaddr_in();
       client4->sin_family = AF_INET;
       client4->sin_port = htons(0);
       client4->sin_addr.s_addr = m_iSrcIp;
-      g_Config.sockAddr = (struct sockaddr*)client4;
+      t_Config->sockAddr = (struct sockaddr*)client4;
     }
   }
 }
@@ -502,6 +546,12 @@ extern "C" void sigPIPE(int nSignal) {
   // char temp[64];
   // snprintf(temp, sizeof(temp), "\nGet signal: %d, do nothing.\n", nSignal);
   // fwrite(temp, strlen(temp), 1, g_Config.errLogOut);
+}
+
+extern "C" void sigIGNORE(int nSignal) {
+  char temp[64];
+  snprintf(temp, sizeof(temp), "\nGet signal: %d, ignore.\n", nSignal);
+  fwrite(temp, strlen(temp), 1, g_Config.errLogOut);
 }
 
 extern "C" void sigQUIT(int nSignal) {
@@ -516,26 +566,52 @@ extern "C" void sigQUIT(int nSignal) {
   fwrite(temp, strlen(temp), 1, g_Config.errLogOut);
 }
 
+extern "C" void sigRELOAD(int nSignal) {
+  if (loading) {
+    return;
+  }
+  loading = !loading;
+  printf("Reload config from file: %s\n", path);
+  TConfig tmp_Config;
+  initConfig(&tmp_Config);
+  normally_config(&tmp_Config);
+  normally_ip(&tmp_Config);
+  memcpy(&g_Config, &tmp_Config, sizeof(g_Config));
+  loading = !loading;
+}
+
 int main(int argc, char** argv) {
-  initConfig(argc, argv);
-  normally_config();
-  normally_ip();
+  initConfigPath(argc, argv);
+  initConfig(&g_Config);
+  initConfigCmd(&g_Config, argc, argv);
+  normally_config(&g_Config);
+  normally_ip(&g_Config);
   initAhead(&g_Config);
+  loading = false;
 
   // ----信号处理
   for (int i = 1; i <= NSIG; i++) {
     // SIG_DFL默认，SIG_IGN忽略信号
-    signal(i, SIG_DFL);
+    signal(i, sigIGNORE);
   }
-  signal(SIGHUP, sigQUIT);  // 1 终端关闭
-  signal(SIGINT, sigQUIT);  // 2 ctrl+C
+  if (isatty(0) == 0 || getpgrp() != tcgetpgrp(STDIN_FILENO)) {
+    signal(SIGHUP, sigRELOAD);  // 1 后台运行时，支持重新加载配置
+  } else {
+    signal(SIGHUP, sigQUIT);  // 1 前台运行，终端关闭时退出
+  }
+  signal(0, sigQUIT);       // 0 正常退出
+  signal(SIGINT, sigQUIT);  // 2 Ctrl+C
   // 当目标机器的socket已经关闭连接时，再调用write()发送数据会收到一个RST响应，
   // 第二次调用write()发送数据时会先调用SIGPIPE响应函数，然后write返回-1,errno号为EPIPE(32)
   signal(SIGPIPE, sigPIPE);  // 13
-  signal(SIGQUIT, sigQUIT);  // kill -3
+  signal(SIGQUIT, sigQUIT);  // kill -3 Ctrl+\ dump内存
+  signal(SIGTRAP, SIG_DFL);  // kill -5 调试开关
+  signal(SIGABRT, sigQUIT);  // kill -6
   signal(SIGKILL, sigQUIT);  // kill -9
   signal(SIGTERM, sigQUIT);  // kill -15
-  // signal(SIGTSTP, sigQUIT);  // kill -20 可捕获的stop信号，因为可以用CONT信号继续运行，不需处理
+  signal(SIGCONT, SIG_DFL);  // 18
+  signal(SIGSTOP, SIG_DFL);  // 19
+  signal(SIGTSTP, SIG_DFL);  // 20，Ctrl+Z，可捕获的stop信号. 可以用CONT信号继续运行
 
   // ----数据初始化
   Results_Now = new TResult[g_Config.m_iThreadNum];
@@ -765,7 +841,6 @@ void wait_threads_exit() {
   } catch (...) {
     char temp[64] = "ERR: pthread_cancel failed\n";
     fwrite(temp, strlen(temp), 1, g_Config.errLogOut);
-    fflush(stdout);
   }
 
   // 等待线程结束
