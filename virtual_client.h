@@ -10,10 +10,10 @@
 
 #include "tlib_cfg.h"
 
-typedef struct {
+struct LINGER {
   u_short l_onoff;
   u_short l_linger;
-} LINGER;
+};
 
 class VirtualClient {
  public:

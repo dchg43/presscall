@@ -16,13 +16,15 @@
 #define SEND_MAX_LEN 8181    // large_client_header_buffers默认8K
 #define RECV_MAX_LEN 2524    // MSS + MAX_HEADER_LEN
 #define MAX_HEADER_LEN 1024  // client_header_buffer_size默认1024
+#define MAX_COOKIE_LEN 512
+#define MAX_PATH_LEN 512  // PATH_MAX
 
 // #define countof(x) (sizeof(x) / sizeof(x[0]))
 #define tmin(x, y) ((x) < (y) ? (x) : (y))
 
 enum tmode { EN_CS = 0, EN_HTTP = 1, EN_HTTPS = 2 };
 
-typedef struct {
+struct TConfig {
   // char* m_pszSendBuff;
   // char* m_pszRecvBuff;
   // struct sockaddr* server;
@@ -66,12 +68,12 @@ typedef struct {
   char m_clientCert[256];  // ClientCert
   char m_clientKey[256];   // ClientKey
   char m_tlsCiphers[512];  // ssl_ciphers
-} TConfig;
+};
 
-typedef struct {
+struct TNVStu {
   char szName[MAX_CONFIG_LINE_LEN];
   char szVal[MAX_CONFIG_LINE_LEN];
-} TNVStu;
+};
 
 void TLib_Cfg_GetConfig(const char* sConfigFilePath, ...);
 void TLib_Cfg_GetNVConfig(const char* sConfigFilePath, TNVStu* pNVStu);

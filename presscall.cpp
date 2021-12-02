@@ -25,8 +25,6 @@
 volatile bool isStarted = false;
 // 是否时间到
 volatile bool isTimeEnd = false;
-// 是否正在加载配置
-volatile bool loading = true;
 // 已运行时间(us)
 int64_t iUsecRuned = 0;
 volatile int stopTimeout = 40960000;  // 最多等待40秒: 40960000us
@@ -43,7 +41,7 @@ int* thread_running = NULL;
 // 单位时间结果的汇总值和临时变量
 struct TResult m_ResultTmp;
 // 存放配置文件路径
-char path[PATH_MAX];
+char config_path_dir[MAX_PATH_LEN];
 
 TConfig g_Config;
 pthread_attr_t attr;
@@ -60,14 +58,6 @@ int sleepAndCheck(int64_t sleepEndTimeUs, int64_t curTime);
  功能描述  : 线程函数
 *****************************************************************************/
 void* thread_func(void* arg) {
-  // 子线程忽略所有信号
-  sigset_t mask;
-  sigfillset(&mask);
-  int err = pthread_sigmask(SIG_BLOCK, &mask, NULL);
-  if (err != 0) {
-    printf("ERR: set sigmask failed: %d, %s/n", err, strerror(err));
-  }
-
   // TConfig* config = (TConfig*)arg;
   int iMyID = *static_cast<int*>(arg);
   if (threads_array[iMyID].call_numbers == 0) {
@@ -197,149 +187,80 @@ void thread_clean_func(void* arg) {
   thread_running[threadID] = 0;
 }
 
-/*****************************************************************************
- 函 数 名  : child_func
- 功能描述  : 创建线程函数
-*****************************************************************************/
-void* child_func(void* arg) {
-  // int iMyID = *static_cast<int*>(arg);
-  // 栈大小最小值16384，即16KB，默认8MB
-  int ret, realThreadNum = 0;
-  int64_t callPerThread = -1;
-  int64_t remain = -1;
-  if (g_Config.m_iCallNumbers > 0) {
-    callPerThread = g_Config.m_iCallNumbers / g_Config.m_iThreadNum;
-    remain = g_Config.m_iCallNumbers - callPerThread * g_Config.m_iThreadNum;
-  }
-  isStarted = true;
-  // 创建线程
-  for (int i = 0; i < g_Config.m_iThreadNum; i++) {
-    if ((int64_t)i < remain) {
-      threads_array[i].call_numbers = callPerThread + 1;
-    } else {
-      if (callPerThread == 0L) {
-        // 请求数为0，不需要起线程
-        thread_running[i] = 0;
-        continue;
-      }
-      threads_array[i].call_numbers = callPerThread;
-    }
-
-    threads_array[i].thread_id = i;
-    ret = pthread_create(&threads_array[i].thread_pid, &attr, thread_func,
-                         &threads_array[i].thread_id);
-    if (ret != 0) {
-      threads_array[i].thread_pid = 0;
-      if (g_Config.m_iPrintError) {
-        char temp[64];
-        snprintf(temp, sizeof(temp), "create thread failed :%d[%d]\n", ret, i);
-        fwrite(temp, strlen(temp), 1, g_Config.errLogOut);
-      }
-      // exit(3);
-    } else {
-      realThreadNum++;
-    }
-    // 防止线程数设置过大，而内存不足，导致一直卡在创建线程无法退出
-    if (isTimeEnd) {
-      g_Config.m_iThreadNum = i + 1;
-      break;
-    }
-  }
-  // isStarted = true;
-
-  time_t rawtime;
-  struct tm p_tm_time;
-  char str_time[32];
-  time(&rawtime);
-  localtime_r(&rawtime, &p_tm_time);
-  strftime(str_time, sizeof(str_time), "%Y-%m-%d %H:%M:%S", &p_tm_time);
-
-  printf("%s started, %d threads running, will %sprint error message ...\n", str_time,
-         realThreadNum, g_Config.m_iPrintError ? "" : "not ");
-  printf(
-      "\nTIME      OK/NO/BAD/NOCONN/ALL=PERCENT      TPS     AvgTime(ms)  MaxTime(ms) "
-      " <%3dms  <%3dms  <%3dms  >%3dms\n",
-      g_Config.m_iTimeLevel1 / 1000, g_Config.m_iTimeLevel2 / 1000, g_Config.m_iTimeLevel3 / 1000,
-      g_Config.m_iTimeLevel3 / 1000);
-  fflush(stdout);
-
-  return NULL;
-}
-
 void initConfigPath(int argc, char** argv) {
   // 获取参数
-  int maxPathLen = sizeof(path) - strlen(CFGFILE) - 1;
+  int maxPathLen = sizeof(config_path_dir) - strlen(CFGFILE) - 1;
 
   if (*(argv[0]) == '/') {
-    memcpy(path, argv[0], strlen(argv[0]) + 1);
+    memcpy(config_path_dir, argv[0], strlen(argv[0]) + 1);
   } else {
-    char* ptr = getcwd(path, maxPathLen);
+    char* ptr = getcwd(config_path_dir, maxPathLen);
     if (ptr == NULL) {
-      int ret = readlink("/proc/self/exe", path, maxPathLen);
+      int ret = readlink("/proc/self/exe", config_path_dir, maxPathLen);
       if (ret < 0 || ret >= maxPathLen) {  // 等于maxPathLen说明长度超过了PATH_MAX
         // 出错了，结束程序
         printf("get conf file path failed\n");
         fflush(stdout);
         exit(1);
       }
-      path[ret] = '\0';  // readlink返回字符串不是以\0结尾
+      config_path_dir[ret] = '\0';  // readlink返回字符串不是以\0结尾
     } else {
-      strncat(path, "/", 2);  // getcwd获取的路径最后没有'/'
+      strncat(config_path_dir, "/", 2);  // getcwd获取的路径最后没有'/'
       if (strlen(argv[0]) > 1 && argv[0][0] == '.' && argv[0][1] == '/') {
-        strncat(path, argv[0] + 2, strlen(argv[0]) + 1 - 2);
+        strncat(config_path_dir, argv[0] + 2, strlen(argv[0]) + 1 - 2);
       } else {
-        strncat(path, argv[0], strlen(argv[0]) + 1);
+        strncat(config_path_dir, argv[0], strlen(argv[0]) + 1);
       }
     }
   }
   // 去掉可执行文件名，得到目录
-  char* ptr = strrchr(path, '/');
+  char* ptr = strrchr(config_path_dir, '/');
   if (ptr != NULL) {
     *(ptr + 1) = '\0';
   } else {
-    memcpy(path, "/", 2);
+    memcpy(config_path_dir, "/", 2);
   }
 
-  // int rootPathLen = strlen(path);
-  strncat(path, CFGFILE, strlen(CFGFILE) + 1);
-  printf("Config file: %s\n", path);
+  // int rootPathLen = strlen(config_path_dir);
+  strncat(config_path_dir, CFGFILE, strlen(CFGFILE) + 1);
+  printf("Config file: %s\n", config_path_dir);
 }
 
 void initConfig(TConfig* t_Config) {
   memset(t_Config, 0, sizeof(*t_Config));
   char errLogPath[120];
   TLib_Cfg_GetConfig(
-      path,  // config file path
-      "Host", CFG_STRING, t_Config->m_szDestIp, "127.0.0.1", sizeof(t_Config->m_szDestIp),  // Host
-      "HttpMethod", CFG_STRING, t_Config->m_szMethod, "GET",
-      sizeof(t_Config->m_szMethod),                                  // Method
-      "Port", CFG_INT, &(t_Config->m_iDestPort), 80,                 // Port
-      "ThreadNum", CFG_INT, &(t_Config->m_iThreadNum), 1,            // Thread number
-      "ThreadSleepMs", CFG_INT, &(t_Config->m_iThreadSleepUs), 0,    // sleep time
-      "RunDuration", CFG_INT64, &(t_Config->m_iRunDuration), 0LL,    // run time
-      "CallNumbers", CFG_INT64, &(t_Config->m_iCallNumbers), 0LL,    // Call Numbers
-      "SampleSecs", CFG_INT64, &(t_Config->m_iSampleUs), 1LL,        //
-      "TestMode", CFG_INT, &(t_Config->m_test_mode), 1,              //
-      "LongConnection", CFG_INT, &(t_Config->m_iLongConn), 0,        //
-      "PrintError", CFG_STRING, errLogPath, "", sizeof(errLogPath),  //
-      "useDiffPort", CFG_INT, &(t_Config->m_iUseDiffPort), 0,        //
-      "MsgTimeout", CFG_INT64, &(t_Config->m_iTimeout), 60000000LL,  //
-      "LingerTime", CFG_INT, &(t_Config->m_iLingerTime), 1,          //
-      "MsgLen", CFG_INT, &(t_Config->m_iLen), 0,                     //
-      "GetFile", CFG_STRING, &(t_Config->m_pszGetFile), "", sizeof(t_Config->m_pszGetFile),  //
-      "GetFileLen", CFG_INT, &(t_Config->m_iRecvLen), RECV_MAX_LEN - MAX_HEADER_LEN,         //
-      "Domain", CFG_STRING, &(t_Config->m_pszHost), "", sizeof(t_Config->m_pszHost),         //
+      config_path_dir,  // config file path
+      "Host", CFG_STRING, &t_Config->m_szDestIp, "127.0.0.1", sizeof(t_Config->m_szDestIp),  // Host
+      "HttpMethod", CFG_STRING, &t_Config->m_szMethod, "GET",
+      sizeof(t_Config->m_szMethod),                                   // Method
+      "Port", CFG_INT, &t_Config->m_iDestPort, 80,                    // Port
+      "ThreadNum", CFG_INT, &t_Config->m_iThreadNum, 1,               // Thread number
+      "ThreadSleepMs", CFG_INT, &t_Config->m_iThreadSleepUs, 0,       // sleep time
+      "RunDuration", CFG_INT64, &t_Config->m_iRunDuration, 0LL,       // run time
+      "CallNumbers", CFG_INT64, &t_Config->m_iCallNumbers, 0LL,       // Call Numbers
+      "SampleSecs", CFG_INT64, &t_Config->m_iSampleUs, 1LL,           //
+      "TestMode", CFG_INT, &t_Config->m_test_mode, 1,                 //
+      "LongConnection", CFG_INT, &t_Config->m_iLongConn, 0,           //
+      "PrintError", CFG_STRING, &errLogPath, "", sizeof(errLogPath),  //
+      "useDiffPort", CFG_INT, &t_Config->m_iUseDiffPort, 0,           //
+      "MsgTimeout", CFG_INT64, &t_Config->m_iTimeout, 60000000LL,     //
+      "LingerTime", CFG_INT, &t_Config->m_iLingerTime, 1,             //
+      "MsgLen", CFG_INT, &t_Config->m_iLen, 0,                        //
+      "GetFile", CFG_STRING, &t_Config->m_pszGetFile, "", sizeof(t_Config->m_pszGetFile),  //
+      "GetFileLen", CFG_INT, &t_Config->m_iRecvLen, RECV_MAX_LEN - MAX_HEADER_LEN,         //
+      "Domain", CFG_STRING, &t_Config->m_pszHost, "", sizeof(t_Config->m_pszHost),         //
 
-      "SockAddress", CFG_STRING, &(t_Config->m_szSockAddr), "", sizeof(t_Config->m_szSockAddr),  //
-      "CaCert", CFG_STRING, &(t_Config->m_caCert), "", sizeof(t_Config->m_caCert),               //
-      "ClientCert", CFG_STRING, &(t_Config->m_clientCert), "", sizeof(t_Config->m_clientCert),   //
-      "ClientKey", CFG_STRING, &(t_Config->m_clientKey), "", sizeof(t_Config->m_clientKey),      //
-      "ssl_protocol", CFG_STRING, &(t_Config->m_tlsProtocol), "",
-      sizeof(t_Config->m_tlsProtocol),                                                           //
-      "ssl_ciphers", CFG_STRING, &(t_Config->m_tlsCiphers), "", sizeof(t_Config->m_tlsCiphers),  //
-      "RspTimeLevel1", CFG_INT, &(t_Config->m_iTimeLevel1), 10,                                  //
-      "RspTimeLevel2", CFG_INT, &(t_Config->m_iTimeLevel2), 100,                                 //
-      "RspTimeLevel3", CFG_INT, &(t_Config->m_iTimeLevel3), 1000,                                //
+      "SockAddress", CFG_STRING, &t_Config->m_szSockAddr, "", sizeof(t_Config->m_szSockAddr),  //
+      "CaCert", CFG_STRING, &t_Config->m_caCert, "", sizeof(t_Config->m_caCert),               //
+      "ClientCert", CFG_STRING, &t_Config->m_clientCert, "", sizeof(t_Config->m_clientCert),   //
+      "ClientKey", CFG_STRING, &t_Config->m_clientKey, "", sizeof(t_Config->m_clientKey),      //
+      "ssl_protocol", CFG_STRING, &t_Config->m_tlsProtocol, "",
+      sizeof(t_Config->m_tlsProtocol),                                                         //
+      "ssl_ciphers", CFG_STRING, &t_Config->m_tlsCiphers, "", sizeof(t_Config->m_tlsCiphers),  //
+      "RspTimeLevel1", CFG_INT, &t_Config->m_iTimeLevel1, 10,                                  //
+      "RspTimeLevel2", CFG_INT, &t_Config->m_iTimeLevel2, 100,                                 //
+      "RspTimeLevel3", CFG_INT, &t_Config->m_iTimeLevel3, 1000,                                //
       // "double_example", CFG_DOUBLE, &test, 1000.123D,
       NULL);
 
@@ -400,10 +321,11 @@ void normally_config(TConfig* t_Config) {
     // exit(2);
   }
 
-  char workDir[PATH_MAX];
-  char* ptr = strrchr(path, '/');
+  char workDir[MAX_PATH_LEN];
+  char* ptr = strrchr(config_path_dir, '/');
   if (ptr != NULL) {
-    memcpy(workDir, path, ptr - path);
+    memcpy(workDir, config_path_dir, ptr - config_path_dir);
+    workDir[ptr - config_path_dir] = '\0';
   } else {
     memcpy(workDir, ".", 2);
   }
@@ -416,14 +338,14 @@ void normally_config(TConfig* t_Config) {
   if (strlen(t_Config->m_clientCert) > 0 && t_Config->m_clientCert[0] != '/') {
     memcpy(tmp, t_Config->m_clientCert, strlen(t_Config->m_clientCert) + 1);
     snprintf(t_Config->m_clientCert, sizeof(t_Config->m_clientCert), "%s/%s", workDir, tmp);
-    if (strlen(t_Config->m_clientKey) > 0) {
-      if (t_Config->m_clientKey[0] != '/') {
-        memcpy(tmp, t_Config->m_clientKey, strlen(t_Config->m_clientKey) + 1);
-        snprintf(t_Config->m_clientKey, sizeof(t_Config->m_clientKey), "%s/%s", workDir, tmp);
-      }
-    } else {
-      memcpy(t_Config->m_clientKey, t_Config->m_clientCert, strlen(t_Config->m_clientCert) + 1);
+  }
+  if (strlen(t_Config->m_clientKey) > 0) {
+    if (t_Config->m_clientKey[0] != '/') {
+      memcpy(tmp, t_Config->m_clientKey, strlen(t_Config->m_clientKey) + 1);
+      snprintf(t_Config->m_clientKey, sizeof(t_Config->m_clientKey), "%s/%s", workDir, tmp);
     }
+  } else {
+    memcpy(t_Config->m_clientKey, t_Config->m_clientCert, strlen(t_Config->m_clientCert) + 1);
   }
 
   if (t_Config->m_pszGetFile[0] != '/') {
@@ -471,6 +393,7 @@ void normally_config(TConfig* t_Config) {
          t_Config->m_iLongConn, t_Config->m_iLen, t_Config->m_iThreadSleepUs,
          t_Config->m_iRunDuration, t_Config->m_iTimeLevel1, t_Config->m_iTimeLevel2,
          t_Config->m_iTimeLevel3);
+  fflush(stdout);
 
   if (t_Config->m_iSampleUs > 0 && LLONG_MAX / 1000000 > t_Config->m_iSampleUs) {
     t_Config->m_iSampleUs = t_Config->m_iSampleUs * 1000000;
@@ -548,36 +471,115 @@ extern "C" void sigPIPE(int nSignal) {
   // fwrite(temp, strlen(temp), 1, g_Config.errLogOut);
 }
 
-extern "C" void sigIGNORE(int nSignal) {
-  char temp[64];
-  snprintf(temp, sizeof(temp), "\nGet signal: %d, ignore.\n", nSignal);
-  fwrite(temp, strlen(temp), 1, g_Config.errLogOut);
-}
-
-extern "C" void sigQUIT(int nSignal) {
-  if (!isTimeEnd) {
-    isTimeEnd = true;
-    g_Config.m_iThreadSleepUs = 0;
+/*****************************************************************************
+ 函 数 名  : child_func
+ 功能描述  : 创建线程函数
+*****************************************************************************/
+void* child_func(void* arg) {
+  // 栈大小最小值16384，即16KB，默认8MB
+  int ret, realThreadNum = 0;
+  int64_t callPerThread = -1;
+  int64_t remain = -1;
+  if (g_Config.m_iCallNumbers > 0) {
+    callPerThread = g_Config.m_iCallNumbers / g_Config.m_iThreadNum;
+    remain = g_Config.m_iCallNumbers - callPerThread * g_Config.m_iThreadNum;
   }
-  stopTimeout /= 2;
+  isStarted = true;
+  // 创建线程
+  for (int i = 0; i < g_Config.m_iThreadNum; i++) {
+    if ((int64_t)i < remain) {
+      threads_array[i].call_numbers = callPerThread + 1;
+    } else {
+      if (callPerThread == 0L) {
+        // 请求数为0，不需要起线程
+        thread_running[i] = 0;
+        continue;
+      }
+      threads_array[i].call_numbers = callPerThread;
+    }
 
-  char temp[64];
-  snprintf(temp, sizeof(temp), "\nGet signal: %d, quit threads ...\n", nSignal);
-  fwrite(temp, strlen(temp), 1, g_Config.errLogOut);
-}
-
-extern "C" void sigRELOAD(int nSignal) {
-  if (loading) {
-    return;
+    threads_array[i].thread_id = i;
+    ret = pthread_create(&threads_array[i].thread_pid, &attr, thread_func,
+                         &threads_array[i].thread_id);
+    if (ret != 0) {
+      threads_array[i].thread_pid = 0;
+      if (g_Config.m_iPrintError) {
+        char temp[64];
+        snprintf(temp, sizeof(temp), "create thread failed :%d[%d]\n", ret, i);
+        fwrite(temp, strlen(temp), 1, g_Config.errLogOut);
+      }
+      // exit(3);
+    } else {
+      realThreadNum++;
+    }
+    // 防止线程数设置过大，而内存不足，导致一直卡在创建线程无法退出
+    if (isTimeEnd) {
+      g_Config.m_iThreadNum = i + 1;
+      break;
+    }
   }
-  loading = !loading;
-  printf("Reload config from file: %s\n", path);
-  TConfig tmp_Config;
-  initConfig(&tmp_Config);
-  normally_config(&tmp_Config);
-  normally_ip(&tmp_Config);
-  memcpy(&g_Config, &tmp_Config, sizeof(g_Config));
-  loading = !loading;
+  // isStarted = true;
+
+  time_t rawtime;
+  struct tm p_tm_time;
+  char str_time[32];
+  time(&rawtime);
+  localtime_r(&rawtime, &p_tm_time);
+  strftime(str_time, sizeof(str_time), "%Y-%m-%d %H:%M:%S", &p_tm_time);
+
+  printf("%s started, %d threads running, will %sprint error message ...\n", str_time,
+         realThreadNum, g_Config.m_iPrintError ? "" : "not ");
+  printf(
+      "\nTIME      OK/NO/BAD/NOCONN/ALL=PERCENT      TPS     AvgTime(ms)  MaxTime(ms) "
+      " <%3dms  <%3dms  <%3dms  >%3dms\n",
+      g_Config.m_iTimeLevel1 / 1000, g_Config.m_iTimeLevel2 / 1000, g_Config.m_iTimeLevel3 / 1000,
+      g_Config.m_iTimeLevel3 / 1000);
+  fflush(stdout);
+
+  sigset_t* mask = reinterpret_cast<sigset_t*>(arg);
+  int err, sig;
+  char temp[64];
+  while (!isTimeEnd) {
+    err = sigwait(mask, &sig);
+    if (err == 0) {
+      switch (sig) {
+        case SIGHUP:  // 1 前台运行，终端关闭时退出；后台运行时，支持重新加载配置
+          if (getpgrp() != tcgetpgrp(STDIN_FILENO) || isatty(0) == 0) {
+            // 1 后台运行时，支持重新加载配置
+            printf("Reload config from file: %s\n", config_path_dir);
+            TConfig tmp_Config;
+            initConfig(&tmp_Config);
+            normally_config(&tmp_Config);
+            normally_ip(&tmp_Config);
+
+            FILE* old = g_Config.errLogOut;
+            memcpy(&g_Config, &tmp_Config, sizeof(g_Config));
+            if (old != stdout && old != stderr) {
+              fclose(old);
+            }
+            break;
+          }
+          // else 1 前台运行，终端关闭时退出
+        case SIGINT:   // 2 Ctrl+C
+        case SIGQUIT:  // kill -3 Ctrl+\ dump内存
+        case SIGABRT:  // kill -6
+        case SIGKILL:  // kill -9
+        case SIGTERM:  // kill -15
+          isTimeEnd = true;
+          g_Config.m_iThreadSleepUs = 0;
+          stopTimeout /= 2;
+
+          snprintf(temp, sizeof(temp), "\nGet signal: %d, quit threads ...\n", sig);
+          fwrite(temp, strlen(temp), 1, g_Config.errLogOut);
+          break;
+        default:
+          snprintf(temp, sizeof(temp), "\nGet signal: %d, ignore.\n", sig);
+          fwrite(temp, strlen(temp), 1, g_Config.errLogOut);
+      }
+    }
+  }
+
+  return NULL;
 }
 
 int main(int argc, char** argv) {
@@ -587,31 +589,25 @@ int main(int argc, char** argv) {
   normally_config(&g_Config);
   normally_ip(&g_Config);
   initAhead(&g_Config);
-  loading = false;
 
-  // ----信号处理
-  for (int i = 1; i <= NSIG; i++) {
-    // SIG_DFL默认，SIG_IGN忽略信号
-    signal(i, sigIGNORE);
+  // 注册信号屏蔽集，子线程将继承该屏蔽集
+  sigset_t mask;
+  sigemptyset(&mask);
+  sigaddset(&mask, SIGHUP);  // 1 前台运行，终端关闭时退出；后台运行时，支持重新加载配置
+  sigaddset(&mask, SIGINT);   // 2 Ctrl+C
+  sigaddset(&mask, SIGQUIT);  // kill -3 Ctrl+\ dump内存
+  // sigaddset(&mask, SIGTRAP);  // kill -5 调试开关
+  sigaddset(&mask, SIGABRT);  // kill -6
+  sigaddset(&mask, SIGKILL);  // kill -9
+  sigaddset(&mask, SIGTERM);  // kill -15
+  // sigaddset(&mask, SIGCONT);  // 18
+  // sigaddset(&mask, SIGSTOP);  // 19
+  // sigaddset(&mask, SIGTSTP);  // 20，Ctrl+Z，可捕获的stop信号. 可以用CONT信号继续运行
+  int err = pthread_sigmask(SIG_BLOCK, &mask, NULL);
+  if (err != 0) {
+    printf("ERR: set sigmask failed: %s\n", strerror(err));
   }
-  if (isatty(0) == 0 || getpgrp() != tcgetpgrp(STDIN_FILENO)) {
-    signal(SIGHUP, sigRELOAD);  // 1 后台运行时，支持重新加载配置
-  } else {
-    signal(SIGHUP, sigQUIT);  // 1 前台运行，终端关闭时退出
-  }
-  signal(0, sigQUIT);       // 0 正常退出
-  signal(SIGINT, sigQUIT);  // 2 Ctrl+C
-  // 当目标机器的socket已经关闭连接时，再调用write()发送数据会收到一个RST响应，
-  // 第二次调用write()发送数据时会先调用SIGPIPE响应函数，然后write返回-1,errno号为EPIPE(32)
-  signal(SIGPIPE, sigPIPE);  // 13
-  signal(SIGQUIT, sigQUIT);  // kill -3 Ctrl+\ dump内存
-  signal(SIGTRAP, SIG_DFL);  // kill -5 调试开关
-  signal(SIGABRT, sigQUIT);  // kill -6
-  signal(SIGKILL, sigQUIT);  // kill -9
-  signal(SIGTERM, sigQUIT);  // kill -15
-  signal(SIGCONT, SIG_DFL);  // 18
-  signal(SIGSTOP, SIG_DFL);  // 19
-  signal(SIGTSTP, SIG_DFL);  // 20，Ctrl+Z，可捕获的stop信号. 可以用CONT信号继续运行
+  signal(SIGPIPE, sigPIPE);  // 13 该信号不能屏蔽，单独设置该信号处理函数
 
   // ----数据初始化
   Results_Now = new TResult[g_Config.m_iThreadNum];
@@ -630,9 +626,8 @@ int main(int argc, char** argv) {
   // 设置线程栈大小
   pthread_attr_setstacksize(&attr, stacksize);
   // 创建线程
-  int child_id = g_Config.m_iThreadNum;
   pthread_t tidp;
-  ret = pthread_create(&tidp, &attr, child_func, &child_id);
+  ret = pthread_create(&tidp, &attr, child_func, &mask);
   if (ret != 0) {
     if (g_Config.m_iPrintError) {
       char temp[64];
@@ -656,7 +651,7 @@ int main(int argc, char** argv) {
     curTime = getCurrentTimeUs();
     if (sleepEndTimeUs > curTime) {
       if (sleepAndCheck(sleepEndTimeUs, curTime) < 0) {
-        // sleep被打断
+        // sleep被信号打断
         sleepEndTimeUs = getCurrentTimeUs();
       }
     } else {
@@ -687,7 +682,7 @@ int main(int argc, char** argv) {
   delete[] threads_array;
   delete[] thread_running;
   delete[] Results_Now;
-  exit(0);
+  return 0;
 }
 
 /*****************************************************************************
