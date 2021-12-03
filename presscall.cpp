@@ -228,7 +228,7 @@ void initConfigPath(int argc, char** argv) {
 
 void initConfig(TConfig* t_Config) {
   memset(t_Config, 0, sizeof(*t_Config));
-  char errLogPath[120];
+  char errLogPath[256];
   TLib_Cfg_GetConfig(
       config_path_dir,  // config file path
       "Host", CFG_STRING, &t_Config->m_szDestIp, "127.0.0.1", sizeof(t_Config->m_szDestIp),  // Host
@@ -275,7 +275,7 @@ void initConfig(TConfig* t_Config) {
     t_Config->errLogOut = stdout;
   } else {
     t_Config->m_iPrintError = 1;
-    t_Config->errLogOut = fopen(errLogPath, "wb");
+    t_Config->errLogOut = fopen(errLogPath, "ab");
     if (t_Config->errLogOut == NULL) {
       t_Config->errLogOut = stderr;
     }
@@ -321,32 +321,43 @@ void normally_config(TConfig* t_Config) {
     // exit(2);
   }
 
-  char workDir[MAX_PATH_LEN];
   char* ptr = strrchr(config_path_dir, '/');
+  char* workDir;
   if (ptr != NULL) {
+    workDir = new char[ptr - config_path_dir + 1];
     memcpy(workDir, config_path_dir, ptr - config_path_dir);
     workDir[ptr - config_path_dir] = '\0';
   } else {
+    workDir = new char[2];
     memcpy(workDir, ".", 2);
   }
 
-  char tmp[256];
-  if (strlen(t_Config->m_caCert) > 0 && t_Config->m_caCert[0] != '/') {
-    memcpy(tmp, t_Config->m_caCert, strlen(t_Config->m_caCert) + 1);
-    snprintf(t_Config->m_caCert, sizeof(t_Config->m_caCert), "%s/%s", workDir, tmp);
+  if (strlen(t_Config->m_caCert) > 0 && t_Config->m_caCert[0] != '/' &&
+      strlen(t_Config->m_caCert) + strlen(workDir) < sizeof(t_Config->m_caCert)) {
+    memmove(t_Config->m_caCert + strlen(workDir) + 1, t_Config->m_caCert,
+            strlen(t_Config->m_caCert) + 1);
+    memcpy(t_Config->m_caCert, workDir, strlen(workDir));
+    t_Config->m_caCert[strlen(workDir)] = '/';
   }
-  if (strlen(t_Config->m_clientCert) > 0 && t_Config->m_clientCert[0] != '/') {
-    memcpy(tmp, t_Config->m_clientCert, strlen(t_Config->m_clientCert) + 1);
-    snprintf(t_Config->m_clientCert, sizeof(t_Config->m_clientCert), "%s/%s", workDir, tmp);
+  if (strlen(t_Config->m_clientCert) > 0 && t_Config->m_clientCert[0] != '/' &&
+      strlen(t_Config->m_clientCert) + strlen(workDir) < sizeof(t_Config->m_clientCert)) {
+    memmove(t_Config->m_clientCert + strlen(workDir) + 1, t_Config->m_clientCert,
+            strlen(t_Config->m_clientCert) + 1);
+    memcpy(t_Config->m_clientCert, workDir, strlen(workDir));
+    t_Config->m_clientCert[strlen(workDir)] = '/';
   }
   if (strlen(t_Config->m_clientKey) > 0) {
-    if (t_Config->m_clientKey[0] != '/') {
-      memcpy(tmp, t_Config->m_clientKey, strlen(t_Config->m_clientKey) + 1);
-      snprintf(t_Config->m_clientKey, sizeof(t_Config->m_clientKey), "%s/%s", workDir, tmp);
+    if (t_Config->m_clientKey[0] != '/' &&
+        strlen(t_Config->m_clientKey) + strlen(workDir) < sizeof(t_Config->m_clientKey)) {
+      memmove(t_Config->m_clientKey + strlen(workDir) + 1, t_Config->m_clientKey,
+              strlen(t_Config->m_clientKey) + 1);
+      memcpy(t_Config->m_clientKey, workDir, strlen(workDir));
+      t_Config->m_clientKey[strlen(workDir)] = '/';
     }
   } else {
     memcpy(t_Config->m_clientKey, t_Config->m_clientCert, strlen(t_Config->m_clientCert) + 1);
   }
+  delete[] workDir;
 
   if (t_Config->m_pszGetFile[0] != '/') {
     t_Config->m_pszGetFile[strlen(t_Config->m_pszGetFile) + 1] = '\0';
@@ -372,7 +383,7 @@ void normally_config(TConfig* t_Config) {
     memcpy(t_Config->m_szMethod, "GET", strlen("GET") + 1);
   }
 
-  char tmpPort[32];
+  char tmpPort[16];
   if (t_Config->m_iUseDiffPort == 0 || t_Config->m_iThreadNum <= 1) {
     snprintf(tmpPort, sizeof(tmpPort), "%d", t_Config->m_iDestPort);
   } else {
@@ -521,7 +532,7 @@ void* child_func(void* arg) {
 
   time_t rawtime;
   struct tm p_tm_time;
-  char str_time[32];
+  char str_time[20];
   time(&rawtime);
   localtime_r(&rawtime, &p_tm_time);
   strftime(str_time, sizeof(str_time), "%Y-%m-%d %H:%M:%S", &p_tm_time);
@@ -535,47 +546,30 @@ void* child_func(void* arg) {
       g_Config.m_iTimeLevel3 / 1000);
   fflush(stdout);
 
-  sigset_t* mask = reinterpret_cast<sigset_t*>(arg);
-  int err, sig;
-  char temp[64];
-  while (!isTimeEnd) {
-    err = sigwait(mask, &sig);
-    if (err == 0) {
-      switch (sig) {
-        case SIGHUP:  // 1 前台运行，终端关闭时退出；后台运行时，支持重新加载配置
-          if (getpgrp() != tcgetpgrp(STDIN_FILENO) || isatty(0) == 0) {
-            // 1 后台运行时，支持重新加载配置
-            printf("Reload config from file: %s\n", config_path_dir);
-            TConfig tmp_Config;
-            initConfig(&tmp_Config);
-            normally_config(&tmp_Config);
-            normally_ip(&tmp_Config);
+  int64_t runStartTime, curTime, sleepEndTimeUs, runEndTime;
+  curTime = runStartTime = sleepEndTimeUs = getCurrentTimeUs();
+  if (g_Config.m_iRunDuration <= 0 || g_Config.m_iRunDuration > (LLONG_MAX - curTime) / 1000000) {
+    runEndTime = LLONG_MAX;
+  } else {
+    runEndTime = curTime + g_Config.m_iRunDuration * 1000000;
+  }
 
-            FILE* old = g_Config.errLogOut;
-            memcpy(&g_Config, &tmp_Config, sizeof(g_Config));
-            if (old != stdout && old != stderr) {
-              fclose(old);
-            }
-            break;
-          }
-          // else 1 前台运行，终端关闭时退出
-        case SIGINT:   // 2 Ctrl+C
-        case SIGQUIT:  // kill -3 Ctrl+\ dump内存
-        case SIGABRT:  // kill -6
-        case SIGKILL:  // kill -9
-        case SIGTERM:  // kill -15
-          isTimeEnd = true;
-          g_Config.m_iThreadSleepUs = 0;
-          stopTimeout /= 2;
-
-          snprintf(temp, sizeof(temp), "\nGet signal: %d, quit threads ...\n", sig);
-          fwrite(temp, strlen(temp), 1, g_Config.errLogOut);
-          break;
-        default:
-          snprintf(temp, sizeof(temp), "\nGet signal: %d, ignore.\n", sig);
-          fwrite(temp, strlen(temp), 1, g_Config.errLogOut);
+  // 持续运行
+  iUsecRuned = 0;
+  while (sleepEndTimeUs < runEndTime && !isTimeEnd) {
+    sleepEndTimeUs += g_Config.m_iSampleUs;
+    curTime = getCurrentTimeUs();
+    if (sleepEndTimeUs > curTime) {
+      if (sleepAndCheck(sleepEndTimeUs, curTime) < 0) {
+        // sleep被信号打断
+        sleepEndTimeUs = getCurrentTimeUs();
       }
+    } else {
+      // 执行时间超过sleep time
+      sleepEndTimeUs = curTime;
     }
+    iUsecRuned = sleepEndTimeUs - runStartTime;
+    calculate(iUsecRuned, sleepEndTimeUs, g_Config.m_iSampleUs);
   }
 
   return NULL;
@@ -643,49 +637,60 @@ int main(int argc, char** argv) {
     }
   }
 
-  int64_t runStartTime, curTime, sleepEndTimeUs, runEndTime;
-  curTime = runStartTime = sleepEndTimeUs = getCurrentTimeUs();
-  if (g_Config.m_iRunDuration <= 0 || g_Config.m_iRunDuration > (LLONG_MAX - curTime) / 1000000) {
-    runEndTime = LLONG_MAX;
-  } else {
-    runEndTime = curTime + g_Config.m_iRunDuration * 1000000;
-  }
+  int sig;
+  while (!isTimeEnd) {
+    err = sigwait(&mask, &sig);
+    if (err == 0) {
+      char temp[64];
+      switch (sig) {
+        case SIGHUP:  // 1 前台运行，终端关闭时退出；后台运行时，支持重新加载配置
+          if (getpgrp() != tcgetpgrp(STDIN_FILENO) || isatty(0) == 0) {
+            // 1 后台运行时，支持重新加载配置
+            printf("Reload config from file: %s\n", config_path_dir);
+            TConfig tmp_Config;
+            initConfig(&tmp_Config);
+            normally_config(&tmp_Config);
+            normally_ip(&tmp_Config);
 
-  // 持续运行
-  iUsecRuned = 0;
-  while (sleepEndTimeUs < runEndTime && !isTimeEnd) {
-    sleepEndTimeUs += g_Config.m_iSampleUs;
-    curTime = getCurrentTimeUs();
-    if (sleepEndTimeUs > curTime) {
-      if (sleepAndCheck(sleepEndTimeUs, curTime) < 0) {
-        // sleep被信号打断
-        sleepEndTimeUs = getCurrentTimeUs();
+            FILE* old = g_Config.errLogOut;
+            memcpy(&g_Config, &tmp_Config, sizeof(g_Config));
+            if (old != stdout && old != stderr) {
+              fclose(old);
+            }
+            break;
+          }
+          // else 1 前台运行，终端关闭时退出
+        case SIGINT:   // 2 Ctrl+C
+        case SIGQUIT:  // kill -3 Ctrl+\ dump内存
+        case SIGABRT:  // kill -6
+        case SIGKILL:  // kill -9
+        case SIGTERM:  // kill -15
+          isTimeEnd = true;
+          g_Config.m_iThreadSleepUs = 0;
+          stopTimeout /= 2;
+          pthread_kill(tidp, SIGPIPE);  // kill -13
+
+          snprintf(temp, sizeof(temp), "\nGet signal: %d, quit threads ...\n", sig);
+          fwrite(temp, strlen(temp), 1, g_Config.errLogOut);
+          break;
+        default:
+          snprintf(temp, sizeof(temp), "\nGet signal: %d, ignore.\n", sig);
+          fwrite(temp, strlen(temp), 1, g_Config.errLogOut);
       }
-    } else {
-      // 执行时间超过sleep time
-      sleepEndTimeUs = curTime;
     }
-    iUsecRuned = sleepEndTimeUs - runStartTime;
-    calculate(iUsecRuned, sleepEndTimeUs, g_Config.m_iSampleUs);
-  }
-
-  if (!isTimeEnd) {
-    // 通知线程结束
-    isTimeEnd = true;
-    g_Config.m_iThreadSleepUs = 0;
   }
 
   // 等待线程结束
+  wait_threads_exit();
   while (pthread_join(tidp, NULL) != 0) {
     // do nothing
   }
-  wait_threads_exit();
 
   // 释放所有申请的内存
-  pthread_attr_destroy(&attr); /* 不再使用线程属性，将其销毁 */
-  fclose(g_Config.errLogOut);
   destroyEnd(&g_Config);
+  fclose(g_Config.errLogOut);
   delete g_Config.sockAddr;
+  pthread_attr_destroy(&attr); /* 不再使用线程属性，将其销毁 */
   delete[] threads_array;
   delete[] thread_running;
   delete[] Results_Now;
@@ -776,7 +781,7 @@ void calculate(int64_t iUsec, int64_t curTime, int64_t lastTime) {
   m_ResultTmp.m_iTimeL4Num = m_AllResultHistory.m_iTimeL4Num - m_AllResultLast.m_iTimeL4Num;
 
   // 打印本周期结果
-  char percentStr[32];
+  char percentStr[64];
   snprintf(
       percentStr, sizeof(percentStr), "%lu/%lu/%lu/%lu/%lu=%.2f%%", m_ResultTmp.iOkResponseNum,
       m_ResultTmp.iNoResponseNum, m_ResultTmp.iBadRespNum, m_ResultTmp.iConnFailNum,
@@ -851,7 +856,7 @@ void wait_threads_exit() {
     if (thread_running[left] > 0 && pthread_join(threads_array[left].thread_pid, &joinError) != 0) {
       left--;  // 继续等该线程
       if (g_Config.m_iPrintError) {
-        char temp[150];
+        char temp[64];
         snprintf(temp, sizeof(temp), "Wait thread to stop failed:%d, error:%s\n", left,
                  reinterpret_cast<char*>(joinError));
         fwrite(temp, strlen(temp), 1, g_Config.errLogOut);

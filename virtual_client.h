@@ -82,7 +82,7 @@ class VirtualClient {
   int checktcpResponse(int64_t unDataLen, int lastRead);
 
  protected:
-  char m_szErrMsg[100];
+  char m_szErrMsg[256];
 
  private:
   int m_isocket;
