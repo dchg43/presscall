@@ -476,7 +476,6 @@ extern "C" void sigPIPE(int nSignal) {
  功能描述  : 创建线程函数
 *****************************************************************************/
 void* child_func(void* arg) {
-  // 栈大小最小值16384，即16KB，默认8MB
   int ret, realThreadNum = 0;
   int64_t callPerThread = -1;
   int64_t remain = -1;
@@ -607,6 +606,13 @@ int main(int argc, char** argv) {
   if (err != 0) {
     printf("ERR: set sigmask failed: %s\n", strerror(err));
   }
+  // 待忽略的信号。所有子线程继承父线程屏蔽集和动作，且所有线程共享修改，但忽略和屏蔽有不同：
+  // 屏蔽是线程不会收到该信号，所以不会导致如sleep、receive等中断
+  // 忽略线程会收到信号，只是没有动作
+  // for (int i = 1; i <= NSIG; i++) {
+  //   // SIG_DFL默认，SIG_IGN忽略信号
+  //   signal(i, SIG_IGN);
+  // }
   signal(SIGPIPE, sigPIPE);  // 13 该信号不能屏蔽，单独设置该信号处理函数
 
   // ----数据初始化
@@ -619,6 +625,7 @@ int main(int argc, char** argv) {
     thread_running[i] = 1;
   }
 
+  // 修改栈大小可能导致莫名其妙的Segmentation fault，如果出现，可以改大
   // 栈大小最小值16384，即16KB，默认8MB
   int ret, stacksize = 16384;
   // 初始化线程属性
