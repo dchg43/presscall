@@ -641,7 +641,6 @@ int main(int argc, char** argv) {
   while (!isTimeEnd) {
     err = sigwait(&mask, &sig);
     if (err == 0) {
-      char temp[64];
       switch (sig) {
         case SIGHUP:  // 1 前台运行，终端关闭时退出；后台运行时，支持重新加载配置
           if (getpgrp() != tcgetpgrp(STDIN_FILENO) || isatty(0) == 0) {
@@ -660,11 +659,12 @@ int main(int argc, char** argv) {
             break;
           }
           // else 1 前台运行，终端关闭时退出
-        case SIGINT:   // 2 Ctrl+C
-        case SIGQUIT:  // kill -3 Ctrl+\ dump内存
-        case SIGABRT:  // kill -6
-        case SIGKILL:  // kill -9
-        case SIGTERM:  // kill -15
+        case SIGINT:     // 2 Ctrl+C
+        case SIGQUIT:    // kill -3 Ctrl+\ dump内存
+        case SIGABRT:    // kill -6
+        case SIGKILL:    // kill -9
+        case SIGTERM: {  // kill -15
+          char temp[64];
           isTimeEnd = true;
           g_Config.m_iThreadSleepUs = 0;
           stopTimeout /= 2;
@@ -673,9 +673,12 @@ int main(int argc, char** argv) {
           snprintf(temp, sizeof(temp), "\nGet signal: %d, quit threads ...\n", sig);
           fwrite(temp, strlen(temp), 1, g_Config.errLogOut);
           break;
-        default:
+        }
+        default: {
+          char temp[64];
           snprintf(temp, sizeof(temp), "\nGet signal: %d, ignore.\n", sig);
           fwrite(temp, strlen(temp), 1, g_Config.errLogOut);
+        }
       }
     }
   }
