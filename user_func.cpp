@@ -94,12 +94,10 @@ int64_t CUserFunc::DoOnce(void) {
   if (!m_TcpCltSocket->isConnect() && m_TcpCltSocket->connectServer(m_Config) != true) {
     if (!(*m_TcpCltSocket->hasTimeEnd())) {
       if (m_Config->m_iPrintError) {
-        snprintf(
-            m_pszRecvBuff, m_Config->m_iRecvLen, "connect to %s:%d failed: %s.\n",
-            m_Config->m_szDestIp,
+        fprintf(
+            m_Config->errLogOut, "connect to %s:%d failed: %s.\n", m_Config->m_szDestIp,
             m_Config->m_iUseDiffPort == 0 ? m_Config->m_iDestPort : m_Config->m_iDestPort + m_iMyID,
             m_TcpCltSocket->getErrMsg());
-        fwrite(m_pszRecvBuff, strlen(m_pszRecvBuff), 1, m_Config->errLogOut);
       }
       usSleep(100000);  // 连接失败sleep 100ms, 防止反复重连
     }
@@ -108,9 +106,7 @@ int64_t CUserFunc::DoOnce(void) {
 
   if (m_lenSendBuff != m_TcpCltSocket->tcpWrite(m_pszSendBuff, m_lenSendBuff)) {
     if (m_Config->m_iPrintError && !(*m_TcpCltSocket->hasTimeEnd())) {
-      snprintf(m_pszRecvBuff, m_Config->m_iRecvLen, "write error: %s.\n",
-               m_TcpCltSocket->getErrMsg());
-      fwrite(m_pszRecvBuff, strlen(m_pszRecvBuff), 1, m_Config->errLogOut);
+      fprintf(m_Config->errLogOut, "write error: %s.\n", m_TcpCltSocket->getErrMsg());
     }
     return -1;
   }
@@ -126,30 +122,18 @@ int64_t CUserFunc::DoOnce(void) {
   if (result > 0) {
     if (result == 2) {
       if (m_Config->m_iPrintError) {
-        snprintf(m_pszRecvBuff, m_Config->m_iRecvLen, "Cookie changed, new cookie: %s\n",
-                 m_TcpCltSocket->getCookie());
-        fwrite(m_pszRecvBuff, strlen(m_pszRecvBuff), 1, m_Config->errLogOut);
+        fprintf(m_Config->errLogOut, "Cookie changed, new cookie: %s\n",
+                m_TcpCltSocket->getCookie());
       }
       m_lenSendBuff = m_TcpCltSocket->build_buffer(m_pszSendBuff, m_Config);
     }
     return llRspTimeUs;
   } else if (result == -1 && m_Config->m_iPrintError) {
     //    && !(*m_TcpCltSocket->hasTimeEnd()) {
-    int readlen = strlen(m_pszRecvBuff);
-    if (readlen > 0) {
-      int errlen = strlen(m_TcpCltSocket->getErrMsg());
-      if (readlen + errlen + 2 > m_Config->m_iRecvLen) {
-        snprintf(m_pszRecvBuff + readlen - errlen - 2, m_Config->m_iRecvLen, "\n%s\n",
-                 m_TcpCltSocket->getErrMsg());
-      } else {
-        snprintf(m_pszRecvBuff + readlen, m_Config->m_iRecvLen - readlen, "\n%s\n",
-                 m_TcpCltSocket->getErrMsg());
-      }
-      fwrite(m_pszRecvBuff, strlen(m_pszRecvBuff), 1, m_Config->errLogOut);
+    if (strlen(m_pszRecvBuff) > 0) {
+      fprintf(m_Config->errLogOut, "%s\n%s\n", m_TcpCltSocket->getErrMsg(), m_pszRecvBuff);
     } else {
-      snprintf(m_pszRecvBuff, m_Config->m_iRecvLen, "read error: %s.\n",
-               m_TcpCltSocket->getErrMsg());
-      fwrite(m_pszRecvBuff, strlen(m_pszRecvBuff), 1, m_Config->errLogOut);
+      fprintf(m_Config->errLogOut, "read error: %s.\n", m_TcpCltSocket->getErrMsg());
     }
   }
   return result;

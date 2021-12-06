@@ -464,9 +464,7 @@ void normally_ip(TConfig* t_Config) {
 }
 
 extern "C" void sigPIPE(int nSignal) {
-  // char temp[64];
-  // snprintf(temp, sizeof(temp), "\nGet signal: %d, do nothing.\n", nSignal);
-  // fwrite(temp, strlen(temp), 1, g_Config.errLogOut);
+  // fprintf(g_Config.errLogOut, "\nGet signal: %d, do nothing.\n", nSignal);
 }
 
 /*****************************************************************************
@@ -501,9 +499,7 @@ void* child_func(void* arg) {
     if (ret != 0) {
       threads_array[i].thread_pid = 0;
       if (g_Config.m_iPrintError) {
-        char temp[64];
-        snprintf(temp, sizeof(temp), "create thread failed :%d[%d]\n", ret, i);
-        fwrite(temp, strlen(temp), 1, g_Config.errLogOut);
+        fprintf(g_Config.errLogOut, "create thread failed :%d[%d]\n", ret, i);
       }
       // exit(3);
     } else {
@@ -618,9 +614,7 @@ int main(int argc, char** argv) {
   ret = pthread_create(&tidp, &attr, child_func, &mask);
   if (ret != 0) {
     if (g_Config.m_iPrintError) {
-      char temp[64];
-      snprintf(temp, sizeof(temp), "create main thread failed :%d\n", ret);
-      fwrite(temp, strlen(temp), 1, g_Config.errLogOut);
+      fprintf(g_Config.errLogOut, "create main thread failed :%d\n", ret);
     }
   }
 
@@ -651,20 +645,15 @@ int main(int argc, char** argv) {
         case SIGABRT:    // kill -6
         case SIGKILL:    // kill -9
         case SIGTERM: {  // kill -15
-          char temp[64];
           isTimeEnd = true;
           g_Config.m_iThreadSleepUs = 0;
           stopTimeout /= 2;
           pthread_kill(tidp, SIGPIPE);  // kill -13
-
-          snprintf(temp, sizeof(temp), "\nGet signal: %d, quit threads ...\n", sig);
-          fwrite(temp, strlen(temp), 1, g_Config.errLogOut);
+          fprintf(g_Config.errLogOut, "\nGet signal: %d, quit threads ...\n", sig);
           break;
         }
         default: {
-          char temp[64];
-          snprintf(temp, sizeof(temp), "\nGet signal: %d, ignore.\n", sig);
-          fwrite(temp, strlen(temp), 1, g_Config.errLogOut);
+          fprintf(g_Config.errLogOut, "\nGet signal: %d, ignore.\n", sig);
         }
       }
     }
@@ -823,8 +812,7 @@ void wait_threads_exit() {
     for (; i < g_Config.m_iThreadNum; i++) {
       if (thread_running[i] > 0) {
         if (!hasPrinted) {
-          char temp[64] = "WARN: stop timeout, kill thread\n";
-          fwrite(temp, strlen(temp), 1, g_Config.errLogOut);
+          fprintf(g_Config.errLogOut, "WARN: stop timeout, kill thread\n");
           // 打印汇总结果
           printSummary();
           hasPrinted = true;
@@ -836,8 +824,7 @@ void wait_threads_exit() {
       }
     }
   } catch (...) {
-    char temp[64] = "ERR: pthread_cancel failed\n";
-    fwrite(temp, strlen(temp), 1, g_Config.errLogOut);
+    fprintf(g_Config.errLogOut, "ERR: pthread_cancel failed\n");
   }
 
   // 等待线程结束
@@ -846,10 +833,8 @@ void wait_threads_exit() {
     if (thread_running[left] > 0 && pthread_join(threads_array[left].thread_pid, &joinError) != 0) {
       left--;  // 继续等该线程
       if (g_Config.m_iPrintError) {
-        char temp[64];
-        snprintf(temp, sizeof(temp), "Wait thread to stop failed:%d, error:%s\n", left,
-                 reinterpret_cast<char*>(joinError));
-        fwrite(temp, strlen(temp), 1, g_Config.errLogOut);
+        fprintf(g_Config.errLogOut, "Wait thread to stop failed:%d, error:%s\n", left,
+                reinterpret_cast<char*>(joinError));
       }
       usSleep(10000);  // sleep 10ms
     }
