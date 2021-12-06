@@ -15,9 +15,6 @@
 #include <string.h>
 #include <unistd.h>
 
-// #include <cinttypes>
-#include <string>
-
 #include "tlib_cfg.h"
 #include "user_func.h"
 
@@ -354,7 +351,7 @@ void normally_config(TConfig* t_Config) {
       memcpy(t_Config->m_clientKey, workDir, strlen(workDir));
       t_Config->m_clientKey[strlen(workDir)] = '/';
     }
-  } else {
+  } else if (strlen(t_Config->m_clientCert) > 0) {
     memcpy(t_Config->m_clientKey, t_Config->m_clientCert, strlen(t_Config->m_clientCert) + 1);
   }
   delete[] workDir;
@@ -377,12 +374,6 @@ void normally_config(TConfig* t_Config) {
     }
   }
 
-  if (strcasecmp(t_Config->m_szMethod, "POST") == 0) {
-    memcpy(t_Config->m_szMethod, "POST", strlen("POST") + 1);
-  } else {
-    memcpy(t_Config->m_szMethod, "GET", strlen("GET") + 1);
-  }
-
   char tmpPort[16];
   if (t_Config->m_iUseDiffPort == 0 || t_Config->m_iThreadNum <= 1) {
     snprintf(tmpPort, sizeof(tmpPort), "%d", t_Config->m_iDestPort);
@@ -391,7 +382,7 @@ void normally_config(TConfig* t_Config) {
              t_Config->m_iDestPort + t_Config->m_iThreadNum - 1);
   }
 
-  if (strstr(t_Config->m_szDestIp, ":")) {
+  if (strstr(t_Config->m_szDestIp, ":") != NULL) {
     printf("%s %s://[%s]:%s%s, Domain: %s\n", t_Config->m_szMethod,
            t_Config->m_test_mode == 1 ? "http" : (t_Config->m_test_mode == 2 ? "https" : "tcp"),
            t_Config->m_szDestIp, tmpPort, t_Config->m_pszGetFile, t_Config->m_pszHost);
@@ -431,8 +422,7 @@ void normally_config(TConfig* t_Config) {
 void normally_ip(TConfig* t_Config) {
   t_Config->sockAddr = NULL;
   if (strlen(t_Config->m_szSockAddr) > 0) {
-    std::string str_szSockAddr = t_Config->m_szSockAddr;
-    if (str_szSockAddr.find(":", 0) != std::string::npos) {
+    if (strstr(t_Config->m_szSockAddr, ":") != NULL) {
       struct addrinfo addrCriteria;
       memset(&addrCriteria, 0, sizeof(addrCriteria));
       addrCriteria.ai_family = AF_UNSPEC;
@@ -453,24 +443,21 @@ void normally_ip(TConfig* t_Config) {
         memcpy(client6, (struct sockaddr*)(addrList->ai_addr), sizeof(struct sockaddr_in6));
         freeaddrinfo(addrList);
       } else {
-        struct in6_addr m_v6_src;
-        if (inet_pton(AF_INET6, t_Config->m_szSockAddr, &m_v6_src) <= 0) {
+        client6->sin6_family = AF_INET6;
+        client6->sin6_port = htons(0);
+        client6->sin6_scope_id = 0;
+        if (inet_pton(AF_INET6, t_Config->m_szSockAddr, &client6->sin6_addr) <= 0) {
           printf("V6Host is incorrect: %s\n", t_Config->m_szSockAddr);
           fflush(stdout);
           exit(2);
         }
-        client6->sin6_family = AF_INET6;
-        client6->sin6_port = htons(0);
-        client6->sin6_scope_id = 0;
-        memcpy(&client6->sin6_addr, (struct in6_addr*)&m_v6_src, sizeof(m_v6_src));
       }
       t_Config->sockAddr = (struct sockaddr*)client6;
     } else {
-      int m_iSrcIp = inet_addr(t_Config->m_szSockAddr);
       struct sockaddr_in* client4 = new sockaddr_in();
       client4->sin_family = AF_INET;
       client4->sin_port = htons(0);
-      client4->sin_addr.s_addr = m_iSrcIp;
+      client4->sin_addr.s_addr = inet_addr(t_Config->m_szSockAddr);
       t_Config->sockAddr = (struct sockaddr*)client4;
     }
   }
@@ -684,10 +671,10 @@ int main(int argc, char** argv) {
   }
 
   // 等待线程结束
-  wait_threads_exit();
   while (pthread_join(tidp, NULL) != 0) {
     // do nothing
   }
+  wait_threads_exit();
 
   // 释放所有申请的内存
   destroyEnd(&g_Config);

@@ -3,10 +3,6 @@
 */
 #include "user_func.h"
 
-#include <arpa/inet.h>
-
-#include <string>
-
 #include "http_client.h"
 #include "https_client.h"
 #include "tcp_client.h"
@@ -59,30 +55,7 @@ CUserFunc::CUserFunc(int iMyID, TConfig* g_Config) {
   if (g_Config->m_iUseDiffPort != 0) {
     destPort += iMyID;
   }
-
-  std::string str_szDestIp = g_Config->m_szDestIp;
-  if (str_szDestIp.find(":", 0) != std::string::npos) {
-    struct in6_addr m_v6_dest;
-    if (inet_pton(AF_INET6, g_Config->m_szDestIp, &m_v6_dest) <= 0) {
-      printf("V6Host is incorrect: %s\n", g_Config->m_szDestIp);
-      fflush(stdout);
-      exit(2);
-    }
-
-    struct sockaddr_in6* server6 = new sockaddr_in6();
-    server6->sin6_family = AF_INET6;
-    server6->sin6_port = htons(destPort);
-    memcpy(&server6->sin6_addr, (struct in6_addr*)&m_v6_dest, sizeof(m_v6_dest));
-    m_TcpCltSocket->setServer((struct sockaddr*)server6);
-  } else {
-    int m_iDestIp = inet_addr(g_Config->m_szDestIp);
-
-    struct sockaddr_in* server4 = new sockaddr_in();
-    server4->sin_family = AF_INET;
-    server4->sin_port = htons(destPort);
-    server4->sin_addr.s_addr = m_iDestIp;
-    m_TcpCltSocket->setServer((struct sockaddr*)server4);
-  }
+  m_TcpCltSocket->setServer(g_Config->m_szDestIp, destPort);
 }
 
 CUserFunc::CUserFunc(const CUserFunc& src) {

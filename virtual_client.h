@@ -4,6 +4,7 @@
 #ifndef PRESSCALL_ALL_IN_ONE_VIRTUAL_CLIENT_H_
 #define PRESSCALL_ALL_IN_ONE_VIRTUAL_CLIENT_H_
 
+#include <arpa/inet.h>
 #include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
@@ -24,7 +25,14 @@ class VirtualClient {
     cookies = NULL;
     server = NULL;
   }
-  virtual ~VirtualClient() {}
+  virtual ~VirtualClient() {
+    if (cookies != NULL) {
+      delete[] cookies;
+    }
+    if (server != NULL) {
+      delete server;
+    }
+  }
 
   virtual bool connectServer(TConfig* g_Config) = 0;
   virtual void disconnect() = 0;
@@ -47,7 +55,7 @@ class VirtualClient {
   }
   void setCookie(char* setCookies) {
     if (cookies != NULL) {
-      free(cookies);
+      delete[] cookies;
     }
     cookies = setCookies;
   }
@@ -60,11 +68,28 @@ class VirtualClient {
   int getSocket() {
     return m_isocket;
   }
-  void setServer(struct sockaddr* clientServer) {
+  void setServer(char* ip, int port) {
     if (server != NULL) {
-      free(server);
+      delete server;
     }
-    server = clientServer;
+
+    if (strstr(ip, ":") != NULL) {
+      struct sockaddr_in6* server6 = new sockaddr_in6();
+      server6->sin6_family = AF_INET6;
+      server6->sin6_port = htons(port);
+      if (inet_pton(AF_INET6, ip, &server6->sin6_addr) <= 0) {
+        printf("V6Host is incorrect: %s\n", ip);
+        fflush(stdout);
+        exit(2);
+      }
+      server = (struct sockaddr*)server6;
+    } else {
+      struct sockaddr_in* server4 = new sockaddr_in();
+      server4->sin_family = AF_INET;
+      server4->sin_port = htons(port);
+      server4->sin_addr.s_addr = inet_addr(ip);
+      server = (struct sockaddr*)server4;
+    }
   }
 
   /** 0:响应为空 1:成功 2:有cookie -1:失败，响应不是200 */
@@ -89,6 +114,13 @@ class VirtualClient {
   volatile bool* isTimeEnd;
   char* cookies;
   struct sockaddr* server;
+  VirtualClient(const VirtualClient&) {
+    /* do not create copies */
+  }
+  VirtualClient& operator=(const VirtualClient&) {
+    /* do not create copies */
+    return *this;
+  }
 };
 
 #endif  // PRESSCALL_ALL_IN_ONE_VIRTUAL_CLIENT_H_

@@ -12,9 +12,6 @@ class CUserFunc {
   CUserFunc(int iMyID, TConfig* g_Config);
   CUserFunc(const CUserFunc& src);
   ~CUserFunc();
-  CUserFunc& operator=(const CUserFunc&) {
-    return *this;
-  }
   int64_t DoOnce(void);
   void setTimeEnd(volatile bool* timeEnd);
 
@@ -25,6 +22,10 @@ class CUserFunc {
   VirtualClient* m_TcpCltSocket;
   char* m_pszSendBuff;
   char* m_pszRecvBuff;
+  CUserFunc& operator=(const CUserFunc&) {
+    /* do not create copies */
+    return *this;
+  }
 };
 
 int usSleep(int uSec);
