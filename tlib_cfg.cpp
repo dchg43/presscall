@@ -8,6 +8,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/time.h>
+#ifdef __unix
+#  define fopen_s(pFile, filename, mode) ((pFile) = fopen((filename), (mode))) == NULL
+#endif
 
 int64_t getCurrentTimeUs() {
   timeval curTimeVal;
@@ -157,7 +160,7 @@ void TLib_Cfg_GetConfig(const char* sConfigFilePath, ...) {
   va_end(ap);
 
   FILE* pstFile;
-  if ((pstFile = fopen(sConfigFilePath, "r")) == NULL) {
+  if (fopen_s(pstFile, sConfigFilePath, "r")) {
     printf("Config file: %s not exist or not have read permission.\n", sConfigFilePath);
     return;
   }
@@ -179,7 +182,7 @@ void TLib_Cfg_GetConfig(const char* sConfigFilePath, ...) {
 
 void TLib_Cfg_GetNVConfig(const char* sConfigFilePath, TNVStu* pNVStu) {
   FILE* pstFile;
-  if ((pstFile = fopen(sConfigFilePath, "r")) == NULL) {
+  if (fopen_s(pstFile, sConfigFilePath, "r")) {
     printf("Config file: %s not exist or not have read permission.\n", sConfigFilePath);
     return;
   }

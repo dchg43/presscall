@@ -25,7 +25,7 @@ struct TResult {
 struct ThreadArray {
   int thread_id;
   pthread_t thread_pid;
-  volatile int64_t call_numbers;
+  int64_t call_numbers;
 };
 
 #endif  // PRESSCALL_ALL_IN_ONE_PRESSCALL_H_

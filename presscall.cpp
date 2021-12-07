@@ -24,7 +24,7 @@ volatile bool isStarted = false;
 volatile bool isTimeEnd = false;
 // 已运行时间(us)
 int64_t iUsecRuned = 0;
-volatile int stopTimeout = 40960000;  // 最多等待40秒: 40960000us
+int stopTimeout = 40960000;  // 最多等待40秒: 40960000us
 
 // 总呼叫结果,主线程读写
 struct TResult m_AllResultHistory;
@@ -121,7 +121,7 @@ void* thread_func(void* arg) {
     }
     report_result(llRspTimeUs, iMyID);
 
-    if (threads_array[iMyID].call_numbers >= 0) {
+    if (threads_array[iMyID].call_numbers > 0) {
       if (llRspTimeUs >= -1) {  // -2说明未建立连接，不统计
         threads_array[iMyID].call_numbers--;
         if (threads_array[iMyID].call_numbers <= 0) {
@@ -473,7 +473,7 @@ extern "C" void sigPIPE(int nSignal) {
 *****************************************************************************/
 void* child_func(void* arg) {
   int ret, realThreadNum = 0;
-  int64_t callPerThread = -1;
+  int64_t callPerThread = -1;  // 如果m_iCallNumbers为0，则全部设置为-1
   int64_t remain = -1;
   if (g_Config.m_iCallNumbers > 0) {
     callPerThread = g_Config.m_iCallNumbers / g_Config.m_iThreadNum;
@@ -554,6 +554,7 @@ void* child_func(void* arg) {
     iUsecRuned = sleepEndTimeUs - runStartTime;
     calculate(iUsecRuned, sleepEndTimeUs, g_Config.m_iSampleUs);
   }
+  isTimeEnd = true;
 
   return NULL;
 }
@@ -604,7 +605,7 @@ int main(int argc, char** argv) {
 
   // 修改栈大小可能导致莫名其妙的Segmentation fault，如果出现，可以改大
   // 栈大小最小值16384，即16KB，默认8MB
-  int ret, stacksize = 16384;
+  int ret, stacksize = 65536;
   // 初始化线程属性
   pthread_attr_init(&attr);
   // 设置线程栈大小
@@ -618,43 +619,45 @@ int main(int argc, char** argv) {
     }
   }
 
-  int sig;
+  struct timespec timeout;
+  timeout.tv_sec = 0;
+  timeout.tv_nsec = 100000;  // 100ms
   while (!isTimeEnd) {
-    err = sigwait(&mask, &sig);
-    if (err == 0) {
-      switch (sig) {
-        case SIGHUP:  // 1 前台运行，终端关闭时退出；后台运行时，支持重新加载配置
-          if (getpgrp() != tcgetpgrp(STDIN_FILENO) || isatty(0) == 0) {
-            // 1 后台运行时，支持重新加载配置
-            printf("Reload config from file: %s\n", config_path_dir);
-            TConfig tmp_Config;
-            initConfig(&tmp_Config);
-            normally_config(&tmp_Config);
-            normally_ip(&tmp_Config);
+    int sig = sigtimedwait(&mask, NULL, &timeout);
+    switch (sig) {
+      case -1:  // 等待超时，无需处理
+        break;
+      case SIGHUP:  // 1 前台运行，终端关闭时退出；后台运行时，支持重新加载配置
+        if (getpgrp() != tcgetpgrp(STDIN_FILENO) || isatty(0) == 0) {
+          // 1 后台运行时，支持重新加载配置
+          printf("Reload config from file: %s\n", config_path_dir);
+          TConfig tmp_Config;
+          initConfig(&tmp_Config);
+          normally_config(&tmp_Config);
+          normally_ip(&tmp_Config);
 
-            FILE* old = g_Config.errLogOut;
-            memcpy(&g_Config, &tmp_Config, sizeof(g_Config));
-            if (old != stdout && old != stderr) {
-              fclose(old);
-            }
-            break;
+          FILE* old = g_Config.errLogOut;
+          memcpy(&g_Config, &tmp_Config, sizeof(g_Config));
+          if (old != stdout && old != stderr) {
+            fclose(old);
           }
-          // else 1 前台运行，终端关闭时退出
-        case SIGINT:     // 2 Ctrl+C
-        case SIGQUIT:    // kill -3 Ctrl+\ dump内存
-        case SIGABRT:    // kill -6
-        case SIGKILL:    // kill -9
-        case SIGTERM: {  // kill -15
-          isTimeEnd = true;
-          g_Config.m_iThreadSleepUs = 0;
-          stopTimeout /= 2;
-          pthread_kill(tidp, SIGPIPE);  // kill -13
-          fprintf(g_Config.errLogOut, "\nGet signal: %d, quit threads ...\n", sig);
           break;
         }
-        default: {
-          fprintf(g_Config.errLogOut, "\nGet signal: %d, ignore.\n", sig);
-        }
+        // else 1 前台运行，终端关闭时退出
+      case SIGINT:     // 2 Ctrl+C
+      case SIGQUIT:    // kill -3 Ctrl+\ dump内存
+      case SIGABRT:    // kill -6
+      case SIGKILL:    // kill -9
+      case SIGTERM: {  // kill -15
+        isTimeEnd = true;
+        g_Config.m_iThreadSleepUs = 0;
+        stopTimeout /= 2;
+        pthread_kill(tidp, SIGPIPE);  // kill -13
+        fprintf(g_Config.errLogOut, "\nGet signal: %d, quit threads ...\n", sig);
+        break;
+      }
+      default: {
+        fprintf(g_Config.errLogOut, "\nGet signal: %d, ignore.\n", sig);
       }
     }
   }
