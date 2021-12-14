@@ -320,36 +320,45 @@ void normally_config(TConfig* t_Config) {
 
   char* ptr = strrchr(config_path_dir, '/');
   char* workDir;
+  unsigned int worklen;
   if (ptr != NULL) {
-    workDir = new char[ptr - config_path_dir + 1];
-    memcpy(workDir, config_path_dir, ptr - config_path_dir);
-    workDir[ptr - config_path_dir] = '\0';
+    worklen = ptr - config_path_dir;
+    workDir = new char[worklen + 1];
+    memcpy(workDir, config_path_dir, worklen);
+    workDir[worklen] = '\0';
   } else {
+    worklen = 1;
     workDir = new char[2];
     memcpy(workDir, ".", 2);
   }
 
-  if (strlen(t_Config->m_caCert) > 0 && t_Config->m_caCert[0] != '/' &&
-      strlen(t_Config->m_caCert) + strlen(workDir) < sizeof(t_Config->m_caCert)) {
-    memmove(t_Config->m_caCert + strlen(workDir) + 1, t_Config->m_caCert,
-            strlen(t_Config->m_caCert) + 1);
-    memcpy(t_Config->m_caCert, workDir, strlen(workDir));
-    t_Config->m_caCert[strlen(workDir)] = '/';
+  unsigned int calen = strlen(t_Config->m_caCert);
+  unsigned int newcalen = calen + worklen;
+  if (calen > 0 && t_Config->m_caCert[0] != '/' && newcalen < sizeof(t_Config->m_caCert)) {
+    memmove(t_Config->m_caCert + worklen + 1, t_Config->m_caCert, calen);
+    memcpy(t_Config->m_caCert, workDir, worklen);
+    t_Config->m_caCert[worklen] = '/';
+    t_Config->m_caCert[newcalen] = '\0';
   }
-  if (strlen(t_Config->m_clientCert) > 0 && t_Config->m_clientCert[0] != '/' &&
-      strlen(t_Config->m_clientCert) + strlen(workDir) < sizeof(t_Config->m_clientCert)) {
-    memmove(t_Config->m_clientCert + strlen(workDir) + 1, t_Config->m_clientCert,
-            strlen(t_Config->m_clientCert) + 1);
-    memcpy(t_Config->m_clientCert, workDir, strlen(workDir));
-    t_Config->m_clientCert[strlen(workDir)] = '/';
+
+  unsigned int certlen = strlen(t_Config->m_clientCert);
+  unsigned int newcertlen = certlen + worklen;
+  if (certlen > 0 && t_Config->m_clientCert[0] != '/' &&
+      newcertlen < sizeof(t_Config->m_clientCert)) {
+    memmove(t_Config->m_clientCert + worklen + 1, t_Config->m_clientCert, certlen);
+    memcpy(t_Config->m_clientCert, workDir, worklen);
+    t_Config->m_clientCert[worklen] = '/';
+    t_Config->m_clientCert[newcertlen] = '\0';
   }
-  if (strlen(t_Config->m_clientKey) > 0) {
-    if (t_Config->m_clientKey[0] != '/' &&
-        strlen(t_Config->m_clientKey) + strlen(workDir) < sizeof(t_Config->m_clientKey)) {
-      memmove(t_Config->m_clientKey + strlen(workDir) + 1, t_Config->m_clientKey,
-              strlen(t_Config->m_clientKey) + 1);
-      memcpy(t_Config->m_clientKey, workDir, strlen(workDir));
-      t_Config->m_clientKey[strlen(workDir)] = '/';
+
+  unsigned int keylen = strlen(t_Config->m_clientKey);
+  unsigned int newkeylen = keylen + worklen;
+  if (keylen > 0) {
+    if (t_Config->m_clientKey[0] != '/' && newkeylen < sizeof(t_Config->m_clientKey)) {
+      memmove(t_Config->m_clientKey + worklen + 1, t_Config->m_clientKey, keylen);
+      memcpy(t_Config->m_clientKey, workDir, worklen);
+      t_Config->m_clientKey[worklen] = '/';
+      t_Config->m_clientKey[newkeylen] = '\0';
     }
   } else if (strlen(t_Config->m_clientCert) > 0) {
     memcpy(t_Config->m_clientKey, t_Config->m_clientCert, strlen(t_Config->m_clientCert) + 1);
