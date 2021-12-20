@@ -48,6 +48,7 @@ struct TConfig {
   int m_iTimeLevel3;   // RspTimeLevel3
   FILE* errLogOut;     // error log out file
   struct sockaddr* sockAddr;
+  char* m_pszSendContent;
   int64_t m_iRunDuration;  // RunDuration
   int64_t m_iCallNumbers;  // CallNumbers
   int64_t m_iSampleUs;     // SampleSecs

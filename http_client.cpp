@@ -14,7 +14,6 @@ int HttpClient::checkResponse(const char* m_pszRecvBuff, int64_t unDataLen, int 
 }
 
 bool HttpClient::connectServer(TConfig* g_Config) {
-  m_Config = g_Config;
   bool superResult = VirtualClient::connectServer(g_Config);
   if (!superResult) {
     return false;
@@ -31,8 +30,7 @@ bool HttpClient::isConnect() {
 }
 
 bool HttpClient::reconnect() {
-  disconnect();
-  return connectServer(m_Config);
+  return VirtualClient::reconnect();
 }
 
 int HttpClient::readonce(char* pBuff, int64_t iLen) {

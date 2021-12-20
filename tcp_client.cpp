@@ -14,7 +14,6 @@ int TcpClient::checkResponse(const char* m_pszRecvBuff, int64_t unDataLen, int l
 }
 
 bool TcpClient::connectServer(TConfig* g_Config) {
-  m_Config = g_Config;
   bool superResult = VirtualClient::connectServer(g_Config);
   if (!superResult) {
     return false;
@@ -31,8 +30,7 @@ bool TcpClient::isConnect() {
 }
 
 bool TcpClient::reconnect() {
-  disconnect();
-  return connectServer(m_Config);
+  return VirtualClient::reconnect();
 }
 
 int TcpClient::readonce(char* pBuff, int64_t iLen) {

@@ -206,7 +206,6 @@ bool HttpsClient::connectServer(TConfig* g_Config) {
     return true;
   }
 
-  m_Config = g_Config;
   bool superResult = VirtualClient::connectServer(g_Config);
   if (!superResult) {
     return false;
@@ -266,8 +265,7 @@ bool HttpsClient::isConnect() {
 }
 
 bool HttpsClient::reconnect() {
-  disconnect();
-  return connectServer(m_Config);
+  return VirtualClient::reconnect();
 }
 
 int HttpsClient::readonce(char* pBuff, int64_t iLen) {

@@ -10,9 +10,7 @@ void build_cs_buffer(TConfig* g_Config);
 
 class TcpClient : public VirtualClient {
  public:
-  TcpClient() {
-    m_Config = NULL;
-  }
+  TcpClient() {}
   ~TcpClient() {
     disconnect();
   }
@@ -27,9 +25,6 @@ class TcpClient : public VirtualClient {
   int checkResponse(const char* recvData, int64_t unDataLen, int lastRead);
   int readonce(char* pBuff, int64_t iLen);
   int writeonce(char* pBuff, int64_t iLen);
-
- private:
-  TConfig* m_Config;
 };
 
 #endif  // PRESSCALL_ALL_IN_ONE_TCP_CLIENT_H_

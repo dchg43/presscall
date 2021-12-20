@@ -16,7 +16,6 @@ class HttpsClient : public VirtualClient {
  public:
   HttpsClient() {
     ssl = NULL;
-    m_Config = NULL;
   }
   ~HttpsClient() {
     disconnect();
@@ -35,7 +34,6 @@ class HttpsClient : public VirtualClient {
 
  private:
   SSL* ssl;
-  TConfig* m_Config;
 };
 
 #endif  // PRESSCALL_ALL_IN_ONE_HTTPS_CLIENT_H_

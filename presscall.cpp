@@ -312,12 +312,6 @@ void initConfigCmd(TConfig* t_Config, int argc, char** argv) {
 }
 
 void normally_config(TConfig* t_Config) {
-  if (t_Config->m_iLen > SEND_MAX_LEN) {
-    printf("WARN: msgLen is too big, please make sure not have 400 or 414 response\n");
-    fflush(stdout);
-    // exit(2);
-  }
-
   char* ptr = strrchr(config_path_dir, '/');
   char* workDir;
   unsigned int worklen;
@@ -426,6 +420,21 @@ void normally_config(TConfig* t_Config) {
   if (t_Config->m_iLen < 0) {
     t_Config->m_iLen = 0;
   }
+
+  char* tmp = new char[t_Config->m_iLen + 5];
+  const char CCH[] = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_,.";
+  // srand((unsigned)time(NULL));
+  int i;
+  for (i = 0; i < t_Config->m_iLen; i++) {
+    tmp[i] = CCH[rand() % (sizeof(CCH) - 1)];
+  }
+  if (t_Config->m_test_mode != EN_CS && strcasecmp(t_Config->m_szMethod, "GET") == 0) {
+    memcpy(tmp + i, "\r\n\r\n", 5);
+    t_Config->m_iLen += 4;
+  } else {
+    tmp[i] = '\0';
+  }
+  t_Config->m_pszSendContent = tmp;
 }
 
 void normally_ip(TConfig* t_Config) {
@@ -681,6 +690,7 @@ int main(int argc, char** argv) {
   destroyEnd(&g_Config);
   fclose(g_Config.errLogOut);
   delete g_Config.sockAddr;
+  delete[] g_Config.m_pszSendContent;
   pthread_attr_destroy(&attr); /* 不再使用线程属性，将其销毁 */
   delete[] threads_array;
   delete[] thread_running;

@@ -12,18 +12,8 @@
 #include <unistd.h>
 
 int VirtualClient::build_http_buffer(char* m_pszSendBuff, TConfig* g_Config) {
-  char* tmp = new char[g_Config->m_iLen + 1];
-
-  const char CCH[] = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_,.";
-  // srand((unsigned)time(NULL));
-  int i;
-  for (i = 0; i < g_Config->m_iLen; i++) {
-    tmp[i] = CCH[rand() % (sizeof(CCH) - 1)];
-  }
-  tmp[i] = '\0';
-
   /* Build a http request. */
-  snprintf(m_pszSendBuff, g_Config->m_iLen + MAX_HEADER_LEN,
+  snprintf(m_pszSendBuff, MAX_HEADER_LEN,
            "%s %s HTTP/1.1\r\n"
            "Accept: */*\r\n"
            "Connection: %s\r\n"
@@ -33,27 +23,22 @@ int VirtualClient::build_http_buffer(char* m_pszSendBuff, TConfig* g_Config) {
            g_Config->m_szMethod, g_Config->m_pszGetFile,
            (g_Config->m_iLongConn) ? "keep-alive" : "close", g_Config->m_pszHost);
   if (cookies != NULL) {
-    snprintf(m_pszSendBuff + strlen(m_pszSendBuff),
-             g_Config->m_iLen + MAX_HEADER_LEN - strlen(m_pszSendBuff), "Cookie: %s;\r\n", cookies);
+    snprintf(m_pszSendBuff + strlen(m_pszSendBuff), MAX_HEADER_LEN - strlen(m_pszSendBuff),
+             "Cookie: %s;\r\n", cookies);
   }
   if (strcasecmp(g_Config->m_szMethod, "POST") == 0) {
-    snprintf(m_pszSendBuff + strlen(m_pszSendBuff),
-             g_Config->m_iLen + MAX_HEADER_LEN - strlen(m_pszSendBuff),
+    snprintf(m_pszSendBuff + strlen(m_pszSendBuff), MAX_HEADER_LEN - strlen(m_pszSendBuff),
              "Content-Length: %d\r\n"
              "Content-Type: application/x-www-form-urlencoded\r\n"
-             "\r\n"
-             "%s",
-             g_Config->m_iLen, tmp);
-  } else {
-    snprintf(m_pszSendBuff + strlen(m_pszSendBuff),
-             g_Config->m_iLen + MAX_HEADER_LEN - strlen(m_pszSendBuff),
-             "XXXSize: %d\r\n"
-             "XXXLine: %s\r\n"
              "\r\n",
-             g_Config->m_iLen, tmp);
+             g_Config->m_iLen);
+  } else {
+    snprintf(m_pszSendBuff + strlen(m_pszSendBuff), MAX_HEADER_LEN - strlen(m_pszSendBuff),
+             "XXXSize: %d\r\n"
+             "XXXLine: ",
+             g_Config->m_iLen);
   }
 
-  delete[] tmp;
   return strlen(m_pszSendBuff);
 }
 
@@ -64,17 +49,9 @@ int VirtualClient::build_tcp_buffer(char* m_pszSendBuff, TConfig* g_Config) {
   *tmp = htonl(0x4E534153);
   *(tmp + sizeof(int)) = htonl(total_len);
 
-  tmp += 8;
+  tmp[8] = '\0';
 
-  const char CCH[] = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_,.";
-  // srand((unsigned)time(NULL));
-  int i;
-  for (i = 0; i < g_Config->m_iLen; i++) {
-    tmp[i] = CCH[rand() % (sizeof(CCH) - 1)];
-  }
-  tmp[i] = '\0';
-
-  return total_len;
+  return 8;
 }
 
 /** 返回0，读完；>0没有读完；-1未收到完整消息头 */
@@ -199,6 +176,7 @@ bool VirtualClient::connectServer(TConfig* g_Config) {
   }
 
   disconnect();
+  m_Config = g_Config;
 
   // create
   if ((m_isocket = socket(server->sa_family, SOCK_STREAM, 0)) < 0) {
@@ -364,6 +342,11 @@ bool VirtualClient::isConnect() {
   return true;
 }
 
+bool VirtualClient::reconnect() {
+  disconnect();
+  return connectServer(m_Config);
+}
+
 int VirtualClient::tcpRead(char* pBuff, int64_t iBufLen) {
   int64_t iReceivLen = 0;
   int64_t iResponseLen = -1;
@@ -432,10 +415,13 @@ int VirtualClient::tcpRead(char* pBuff, int64_t iBufLen) {
 }
 
 int VirtualClient::tcpWrite(char* pBuff, int64_t iBufLen) {
+  // 发送消息头
   int iWriteLen = 0;
-  while (iBufLen > 0) {
+  int64_t iSendLen = iBufLen;
+  char* pSendBuff = pBuff;
+  while (iSendLen > 0) {
     /* 开始写 */
-    iWriteLen = writeonce(pBuff, iBufLen);
+    iWriteLen = writeonce(pSendBuff, iSendLen);
     if (iWriteLen <= 0) {     /* 出错了 */
       if (errno == EAGAIN) {  // 超时认为失败
         snprintf(m_szErrMsg, sizeof(m_szErrMsg), "write timeout, error: %s[%s:%d]", strerror(errno),
@@ -456,8 +442,39 @@ int VirtualClient::tcpWrite(char* pBuff, int64_t iBufLen) {
       }
     }
 
-    iBufLen -= iWriteLen;
-    pBuff += iWriteLen; /* 从剩下的地方继续写 */
+    iSendLen -= iWriteLen;
+    pSendBuff += iWriteLen; /* 从剩下的地方继续写 */
+  }
+
+  // 发送消息体
+  int iWriteBody = 0;
+  iSendLen = m_Config->m_iLen;
+  pSendBuff = m_Config->m_pszSendContent;
+  while (iSendLen > 0) {
+    /* 开始写 */
+    iWriteBody = writeonce(pSendBuff, iSendLen);
+    if (iWriteBody <= 0) {    /* 出错了 */
+      if (errno == EAGAIN) {  // 超时认为失败
+        snprintf(m_szErrMsg, sizeof(m_szErrMsg), "write timeout, error: %s[%s:%d]", strerror(errno),
+                 __FILE__, __LINE__);
+        disconnect();
+        break;
+      } else if (errno == EINTR || errno == EWOULDBLOCK) { /* 中断错误 我们继续写 */
+        if (*hasTimeEnd()) {                               // 结束不认为是失败
+          disconnect();
+          break;
+        }
+      } else { /* 其他错误 没有办法,只好撤退了 */
+        snprintf(m_szErrMsg, sizeof(m_szErrMsg),
+                 "link close by remote host!write ret=%d, error: %s[%s:%d]", iWriteBody,
+                 strerror(errno), __FILE__, __LINE__);
+        disconnect();
+        break;
+      }
+    }
+
+    iSendLen -= iWriteBody;
+    pSendBuff += iWriteBody; /* 从剩下的地方继续写 */
   }
 
   return iWriteLen;

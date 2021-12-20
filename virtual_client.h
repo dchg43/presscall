@@ -24,6 +24,7 @@ class VirtualClient {
     isTimeEnd = NULL;
     cookies = NULL;
     server = NULL;
+    m_Config = NULL;
   }
   virtual ~VirtualClient() {
     if (cookies != NULL) {
@@ -37,8 +38,8 @@ class VirtualClient {
   virtual bool connectServer(TConfig* g_Config) = 0;
   virtual void disconnect() = 0;
   virtual bool isConnect() = 0;
-  virtual int build_buffer(char* m_pszSendBuff, TConfig* g_Config) = 0;
   virtual bool reconnect() = 0;
+  virtual int build_buffer(char* m_pszSendBuff, TConfig* g_Config) = 0;
   /** 返回0，没有读完；>0读完 */
   virtual int64_t isReadComplete(const char* pData, int64_t unDataLen, int64_t iReceivLenInBuff,
                                  int64_t iPkgTheoryLen) = 0;
@@ -114,6 +115,7 @@ class VirtualClient {
   volatile bool* isTimeEnd;
   char* cookies;
   struct sockaddr* server;
+  TConfig* m_Config;
   VirtualClient(const VirtualClient&) {
     /* do not create copies */
   }

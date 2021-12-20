@@ -47,7 +47,7 @@ CUserFunc::CUserFunc(int iMyID, TConfig* g_Config) {
     m_TcpCltSocket = new HttpClient();  // default send http message
   }
 
-  m_pszSendBuff = new char[m_Config->m_iLen + MAX_HEADER_LEN + 1];
+  m_pszSendBuff = new char[MAX_HEADER_LEN + 1];
   m_lenSendBuff = m_TcpCltSocket->build_buffer(m_pszSendBuff, m_Config);
 
   // 初始化vip、vport
@@ -62,7 +62,7 @@ CUserFunc::CUserFunc(const CUserFunc& src) {
   m_iMyID = src.m_iMyID;
   m_lenSendBuff = src.m_lenSendBuff;
   m_Config = src.m_Config;
-  m_pszSendBuff = new char[m_Config->m_iLen + MAX_HEADER_LEN + 1];
+  m_pszSendBuff = new char[MAX_HEADER_LEN + 1];
   memcpy(m_pszSendBuff, src.m_pszSendBuff, strlen(src.m_pszSendBuff) + 1);
   m_pszRecvBuff = new char[m_Config->m_iRecvLen + 2];
   if (m_Config->m_test_mode == EN_CS) {
