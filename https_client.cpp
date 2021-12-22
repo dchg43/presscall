@@ -269,11 +269,19 @@ bool HttpsClient::reconnect() {
 }
 
 int HttpsClient::readonce(char* pBuff, int64_t iLen) {
-  return SSL_read(ssl, pBuff, iLen);
+  if (ssl != NULL) {
+    return SSL_read(ssl, pBuff, iLen);
+  } else {
+    return 0;
+  }
 }
 
 int HttpsClient::writeonce(char* pBuff, int64_t iLen) {
-  return SSL_write(ssl, pBuff, iLen);
+  if (ssl != NULL) {
+    return SSL_write(ssl, pBuff, iLen);
+  } else {
+    return 0;
+  }
 }
 
 /** 返回0，读完；>0没有读完 */
