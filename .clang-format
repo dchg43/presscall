@@ -20,6 +20,9 @@ IncludeBlocks: Preserve
 #   #endif
 IndentPPDirectives: AfterHash
 
+# 不特殊看待 foreach 宏
+ForEachMacros: ['']
+
 # 允许短的块放在同一行
 AllowShortBlocksOnASingleLine: false
 # 允许短的case标签放在同一行
