@@ -1,6 +1,6 @@
 CFLAGS += -Wall -O2
 # DEBUGFLAG = -g
-LIB += -lstdc++ -ldl -lcrypto -lpthread -lssl
+LIB += -lstdc++ -ldl -lssl -lcrypto -lpthread
 # INC += -std=c++0x
 
 OBJ = \

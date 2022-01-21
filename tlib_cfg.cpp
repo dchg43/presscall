@@ -13,7 +13,7 @@
 #endif
 
 int64_t getCurrentTimeUs() {
-  timeval curTimeVal;
+  struct timeval curTimeVal;
   gettimeofday(&curTimeVal, NULL);
   return curTimeVal.tv_sec * 1000000 + curTimeVal.tv_usec;
 }
