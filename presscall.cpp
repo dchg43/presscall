@@ -894,7 +894,7 @@ void printSummary() {
   printf("Max response time: %.3fms\n", m_AllResultHistory.llMaxRspTimeUs / 1000.0);
   printf("Average response time: %.3fms\n", averageResponseTime);
 
-  // need include <cinttypes> and add -std=c++0x to makefile
+  // need include <cinttypes> and add -std=c++0x to makefile(by INC parm)
   // printf("Running time(hour:min:sec): %" PRIu64 ":%02" PRIu64 ":%06.3f\n", iUsecRuned /
   // 3600000000,
   //        (iUsecRuned / 60000000) % 60, (iUsecRuned % 60000000) / 1000000.0);
