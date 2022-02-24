@@ -139,16 +139,20 @@ int VirtualClient::checkHttpResponse(const char* m_pszRecvBuff, int64_t unDataLe
       const char* pCookieEnd = strchr(pCookie, ';');
       if (pCookieEnd) {
         char* localcookies = getCookie();
-        if (localcookies == NULL) {
-          int cookie_length = pCookieEnd - pCookie + 1;
-          if (cookie_length < MAX_COOKIE_LEN) {
-            cookie_length = MAX_COOKIE_LEN;
-          }
-          localcookies = new char[cookie_length];
+//        if (localcookies == NULL) {
+//          int cookie_length = pCookieEnd - pCookie + 1;
+//          if (cookie_length < MAX_COOKIE_LEN) {
+//            cookie_length = MAX_COOKIE_LEN;
+//          }
+//          localcookies = new char[cookie_length];
+//        }
+        int cookieLength = pCookieEnd - pCookie;
+        if (cookieLength >= MAX_COOKIE_LEN) {
+            cookieLength = MAX_COOKIE_LEN - 1;
         }
-        memcpy(localcookies, pCookie, pCookieEnd - pCookie);
-        localcookies[pCookieEnd - pCookie] = '\0';
-        setCookie(localcookies);
+        memcpy(localcookies, pCookie, cookieLength);
+        localcookies[cookieLength] = '\0';
+//        setCookie(localcookies);
         return 2;
       }
     }

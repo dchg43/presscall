@@ -22,14 +22,14 @@ class VirtualClient {
     memset(m_szErrMsg, 0, sizeof(m_szErrMsg));
     m_isocket = -1;
     isTimeEnd = NULL;
-    cookies = NULL;
+//    cookies = NULL;
     server = NULL;
     m_Config = NULL;
   }
   virtual ~VirtualClient() {
-    if (cookies != NULL) {
-      delete[] cookies;
-    }
+//    if (cookies != NULL) {
+//      delete[] cookies;
+//    }
     if (server != NULL) {
       delete server;
     }
@@ -54,12 +54,12 @@ class VirtualClient {
   char* getCookie() {
     return cookies;
   }
-  void setCookie(char* setCookies) {
-    if (cookies != NULL) {
-      delete[] cookies;
-    }
-    cookies = setCookies;
-  }
+//  void setCookie(char* setCookies) {
+//    if (cookies != NULL) {
+//      delete[] cookies;
+//    }
+//    cookies = setCookies;
+//  }
   void setTimeEnd(volatile bool* timeEnd) {
     isTimeEnd = timeEnd;
   }
@@ -113,7 +113,8 @@ class VirtualClient {
  private:
   int m_isocket;
   volatile bool* isTimeEnd;
-  char* cookies;
+  //char* cookies;
+  char cookies[MAX_COOKIE_LEN];
   struct sockaddr* server;
   TConfig* m_Config;
   VirtualClient(const VirtualClient&) {
